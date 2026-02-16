@@ -102,6 +102,44 @@ The Docker setup starts:
    - PostgreSQL must be running
    - Configure connection in `backend/.env`
 
+### Production Deployment
+
+For production, use the dedicated production Docker Compose setup:
+
+```bash
+# Build and start production stack
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# Or rebuild if needed
+docker-compose -f docker-compose.prod.yml build
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+**Production setup includes:**
+- **Frontend** built to static files, served by Nginx (no dev server)
+- **Backend** compiled and optimized (no ts-node-dev overhead)
+- **Nginx** with gzip compression and security headers
+- **Health checks** on all services
+- **Auto-restart** policies for reliability
+
+**Key differences from development:**
+- No HMR (Hot Module Reload) - full page refresh needed for code changes
+- Frontend served as static files for performance
+- Smaller image sizes and faster startup
+- All services set to auto-restart on failure
+- Proper security headers and caching policies
+
+**Environment configuration:**
+Copy `.env.prod.example` and update values:
+```bash
+cp .env.prod.example .env.prod
+# Edit .env.prod with your production values
+```
+
+**Access:**
+- Application: `http://localhost:8811` (or your configured domain)
+- API: proxied through Nginx
+
 ## Usage
 
 ### Search Tab
@@ -185,6 +223,44 @@ npm run migrate:create -- --name your_migration_name
 ### Running Tests
 
 Frontend and backend currently have no automated tests set up.
+
+## Production Setup Details
+
+### Docker Images
+
+**Development (`docker-compose.yml`):**
+- `frontend/Dockerfile` - Vite dev server with HMR disabled
+- `backend/Dockerfile` - ts-node-dev for hot reload
+- `nginx/nginx.conf` - WebSocket-enabled proxy
+
+**Production (`docker-compose.prod.yml`):**
+- `frontend/Dockerfile.prod` - Multi-stage build, outputs static files
+- `backend/Dockerfile.prod` - Multi-stage build, compiles TypeScript to JavaScript
+- `Dockerfile.nginx.prod` - Combined nginx + frontend builder
+- `nginx/nginx.prod.conf` - Optimized with compression and caching
+
+### Production Features
+
+- **Nginx Compression** - gzip enabled for smaller response sizes
+- **Security Headers** - X-Frame-Options, X-Content-Type-Options, X-XSS-Protection
+- **Caching** - Static assets cached for 1 year, HTML never cached
+- **SPA Routing** - Proper `try_files` for React Router
+- **Health Checks** - Database and service health monitoring
+- **Auto-restart** - All services configured to restart on failure
+
+### Build Flow
+
+**Frontend Production Build:**
+1. Node builder stage installs dependencies
+2. npm run build creates optimized bundle in `dist/`
+3. Nginx stage serves files from `/usr/share/nginx/html`
+4. Result: ~15-20MB image vs ~500MB development image
+
+**Backend Production Build:**
+1. Node builder stage compiles TypeScript to `dist/`
+2. Production stage installs only production dependencies
+3. Migrations run on startup
+4. Result: ~200MB image vs ~500MB development image
 
 ## Environment Variables
 

@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:16
+    container_name: soundbroad-db-prod
+    environment:
+      POSTGRES_USER: soundbroad
+      POSTGRES_PASSWORD: soundbroad
+      POSTGRES_DB: soundbroad
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soundbroad"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: soundbroad-backend-prod
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: soundbroad
+      PGPASSWORD: soundbroad
+      PGDATABASE: soundbroad
+      FILE_STORAGE_PATH: /usr/src/app/storage
+      CORS_ORIGIN: "http://localhost,http://localhost:8811"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - backend_storage_prod:/usr/src/app/storage
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx.prod
+    container_name: soundbroad-nginx-prod
+    depends_on:
+      - backend
+    ports:
+      - "8811:80"
+    restart: unless-stopped
+
+volumes:
+  db_data_prod:
+  backend_storage_prod:

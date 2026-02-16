@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16
@@ -32,8 +30,8 @@ services:
       PGPASSWORD: soundbroad
       PGDATABASE: soundbroad
       FILE_STORAGE_PATH: /usr/src/app/storage
-      # Backend is called via nginx on http://localhost
-      CORS_ORIGIN: http://localhost
+      # Backend CORS - allow localhost on all ports for development
+      CORS_ORIGIN: "http://localhost,http://localhost:3000,http://localhost:5173,http://localhost:8811"
     depends_on:
       db:
         condition: service_healthy
@@ -70,7 +68,7 @@ services:
       - frontend
       - backend
     ports:
-      - "80:80"
+      - "8811:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
 

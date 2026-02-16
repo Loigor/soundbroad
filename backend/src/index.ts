@@ -18,7 +18,10 @@ if (!fs.existsSync(FILE_STORAGE_PATH)) {
   fs.mkdirSync(FILE_STORAGE_PATH, { recursive: true });
 }
 
-app.use(cors({ origin: CORS_ORIGIN }));
+// Parse CORS_ORIGIN - can be comma-separated for multiple origins
+const corsOrigins = CORS_ORIGIN.split(',').map(origin => origin.trim());
+
+app.use(cors({ origin: corsOrigins }));
 app.use(express.json());
 
 const storage = multer.diskStorage({
