@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: soundbroad-db
+    environment:
+      POSTGRES_USER: soundbroad
+      POSTGRES_PASSWORD: soundbroad
+      POSTGRES_DB: soundbroad
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soundbroad"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: soundbroad-backend
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: soundbroad
+      PGPASSWORD: soundbroad
+      PGDATABASE: soundbroad
+      FILE_STORAGE_PATH: /usr/src/app/storage
+      # Backend is called via nginx on http://localhost
+      CORS_ORIGIN: http://localhost
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/usr/src/app
+      - backend_node_modules:/usr/src/app/node_modules
+      - backend_storage:/usr/src/app/storage
+    ports:
+      - "4000:4000"
+    # Run DB migrations on container start, then start dev server
+    command: sh -c "npm run migrate && npm run dev"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: soundbroad-frontend
+    environment:
+      NODE_ENV: development
+      VITE_API_BASE_URL: http://localhost:4000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/usr/src/app
+      - frontend_node_modules:/usr/src/app/node_modules
+    ports:
+      - "5173:5173"
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+  nginx:
+    image: nginx:alpine
+    container_name: soundbroad-nginx
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  db_data:
+  backend_node_modules:
+  backend_storage:
+  frontend_node_modules:
+
