@@ -214,6 +214,14 @@ app.get('/api/samples/:id/audio', async (req: Request, res: Response) => {
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
+    
+    // Set proper headers for audio serving and duration detection
+    res.set({
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=86400', // Cache for 1 day
+      'Content-Length': fs.statSync(filePath).size
+    });
+    
     return res.sendFile(filePath);
   } catch (err) {
     console.error(err);

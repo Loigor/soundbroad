@@ -87,25 +87,36 @@ export const SequencePlayer = forwardRef<SequencePlayerHandle, SequencePlayerPro
     }
   }, [volume]);
 
-  // Report progress to parent - for sequence mode, report overall sequence progress
+  // Report progress to parent - for sequence mode, report overall sequence progress (cumulative across all clips)
   useEffect(() => {
     if (onProgressChange && clips.length > 0) {
-      if (isPlaying) {
-        // Calculate cumulative duration of all clips played so far
-        let totalPlayedDuration = 0;
-        for (let i = 0; i < (currentClipIndex ?? -1); i++) {
-          totalPlayedDuration += clips[i].sample.duration_seconds || 0;
-        }
-        // Add current clip's progress
-        if (currentClipIndex !== null) {
-          totalPlayedDuration += currentTime;
+      // Calculate total duration of entire sequence
+      const totalDuration = clips.reduce((sum, clip) => {
+        const clipDuration = typeof clip.sample.duration_seconds === 'number' ? clip.sample.duration_seconds : 0;
+        return sum + clipDuration;
+      }, 0);
+
+      if (isPlaying && currentClipIndex !== null) {
+        // Calculate cumulative duration: sum of all completely played clips + current progress
+        let cumulativeProgress = 0;
+
+        // Add duration of all clips before the current one
+        for (let i = 0; i < currentClipIndex; i++) {
+          const clipDuration = typeof clips[i].sample.duration_seconds === 'number' ? clips[i].sample.duration_seconds : 0;
+          cumulativeProgress += clipDuration;
         }
 
-        // Calculate total sequence duration
-        const totalDuration = clips.reduce((sum, clip) => sum + (clip.sample.duration_seconds || 0), 0);
+        // Add current clip's playback position
+        cumulativeProgress += currentTime;
 
-        onProgressChange(totalPlayedDuration, totalDuration);
-      } else {
+        // Debug logging
+        if (currentClipIndex === 0 && currentTime < 1) {
+          console.debug(`[SequencePlayer] Sequence progress: ${cumulativeProgress.toFixed(2)}s / ${totalDuration.toFixed(2)}s (clip ${currentClipIndex + 1}/${clips.length})`);
+        }
+
+        // Send cumulative progress to parent for top progress bar
+        onProgressChange(cumulativeProgress, totalDuration);
+      } else if (!isPlaying) {
         // Hide progress bar when not playing
         onProgressChange(0, 0);
       }
@@ -167,6 +178,7 @@ export const SequencePlayer = forwardRef<SequencePlayerHandle, SequencePlayerPro
       setIsPlaying(true);
     } else if (!isPlaying) {
       // Start from beginning
+      console.debug(`[SequencePlayer] Starting sequence with ${clips.length} clips`);
       setIsPlaying(true);
       playClipAtIndex(0);
     }

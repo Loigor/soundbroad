@@ -75,7 +75,12 @@ function App() {
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <AppBar position="static" color="transparent" elevation={0}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <img 
+              src="/logo-favicon.svg" 
+              alt="Soundbroad logo" 
+              style={{ height: 36, width: 36 }}
+            />
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
               Soundbroad
             </Typography>

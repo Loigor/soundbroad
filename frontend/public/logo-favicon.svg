@@ -1,0 +1,26 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#e0f2fe" stroke="#0284c7" stroke-width="2.5"/>
+  
+  <!-- 3x3 Grid of tiles - more aligned and bigger -->
+  <g fill="none" stroke="#0284c7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Row 1 -->
+    <rect x="45" y="45" width="22" height="22" opacity="0.9"/>
+    <rect x="75" y="45" width="22" height="22" opacity="0.7"/>
+    <rect x="105" y="45" width="22" height="22" opacity="0.5"/>
+    
+    <!-- Row 2 -->
+    <rect x="45" y="80" width="22" height="22" opacity="0.8"/>
+    <rect x="75" y="80" width="22" height="22" opacity="1"/>
+    <rect x="105" y="80" width="22" height="22" opacity="0.6"/>
+    
+    <!-- Row 3 -->
+    <rect x="45" y="115" width="22" height="22" opacity="0.6"/>
+    <rect x="75" y="115" width="22" height="22" opacity="0.95"/>
+    <rect x="105" y="115" width="22" height="22" opacity="0.4"/>
+  </g>
+  
+  <!-- Play button circle - centered below grid -->
+  <circle cx="100" cy="155" r="12" fill="none" stroke="#0284c7" stroke-width="2.5" opacity="0.6"/>
+  <polygon points="96,151 96,159 104,155" fill="#0284c7" opacity="0.8"/>
+</svg>
