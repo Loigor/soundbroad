@@ -96,3 +96,6 @@ export async function populateMissingDurations<T extends { id: string; duration_
   }
 
   console.debug(`[audioUtils] After fetch, samples with duration:`, results.filter(s => s.duration_seconds && s.duration_seconds > 0).map(s => ({ id: s.id, dur: s.duration_seconds })));
+  
+  return results;
+}
