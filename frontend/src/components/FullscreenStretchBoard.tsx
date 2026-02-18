@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Box, Grid, Button, Stack, Typography, keyframes, Chip } from '@mui/material';
+import { Box, Grid, Button, Stack, Typography, keyframes, Chip, useMediaQuery, useTheme } from '@mui/material';
 import type { Sample } from '../api/types';
 import { getContrastTextColor } from '../utils/colorTheory';
 import { PlayStatsDisplay } from './PlayStatsDisplay';
@@ -43,20 +43,38 @@ export function FullscreenStretchBoard({
   playingPositionSeconds,
   playingDurationSeconds
 }: FullscreenStretchBoardProps) {
-  // Calculate grid dimensions based on sound count
-  // Prefer landscape orientation with more columns than rows
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Calculate grid dimensions based on sound count and screen size
+  // Mobile: 1 column, Tablet: 2 columns, Desktop: landscape-biased
   const { cols, rows } = useMemo(() => {
     const soundCount = samples.length;
     if (soundCount === 0) return { cols: 1, rows: 1 };
+    
+    // For mobile, use 1-2 columns
+    if (isMobile) {
+      if (soundCount === 1) return { cols: 1, rows: 1 };
+      return { cols: 1, rows: soundCount };
+    }
+    
+    // For tablet, use 2 columns
+    if (isTablet) {
+      const cols = 2;
+      const rows = Math.ceil(soundCount / cols);
+      return { cols, rows };
+    }
+
+    // For desktop, landscape orientation
     if (soundCount === 1) return { cols: 1, rows: 1 };
     if (soundCount === 2) return { cols: 2, rows: 1 };
     if (soundCount === 3) return { cols: 2, rows: 2 };
     
-    // For larger counts, calculate square-ish grid biased towards landscape
     const cols = Math.max(2, Math.ceil(Math.sqrt(soundCount * 1.2)));
     const rows = Math.ceil(soundCount / cols);
     return { cols, rows };
-  }, [samples.length]);
+  }, [samples.length, isMobile, isTablet]);
 
   return (
     <Box
@@ -73,9 +91,9 @@ export function FullscreenStretchBoard({
       }}
     >
       {/* Close button - top right corner */}
-      <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 1301 }}>
-        <Button variant="contained" onClick={onClose} size="small">
-          Exit Stretch
+      <Box sx={{ position: 'absolute', top: { xs: 8, md: 16 }, right: { xs: 8, md: 16 }, zIndex: 1301 }}>
+        <Button variant="contained" onClick={onClose} size={isMobile ? 'small' : 'medium'}>
+          Exit
         </Button>
       </Box>
 
@@ -112,7 +130,7 @@ export function FullscreenStretchBoard({
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: 3,
+                padding: { xs: 1.5, sm: 2, md: 3 },
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 animation: isNearEnd ? `${blinkAnimation} 0.5s infinite` : 'none',
@@ -158,14 +176,18 @@ export function FullscreenStretchBoard({
               )}
 
               <Typography
-                variant="h4"
+                variant={isMobile ? 'body1' : 'h4'}
                 sx={{
                   fontWeight: 700,
                   color: getContrastTextColor(sample.color),
                   marginBottom: 1,
                   wordBreak: 'break-word',
                   wordWrap: 'break-word',
-                  overflowWrap: 'break-word'
+                  overflowWrap: 'break-word',
+                  fontSize: { xs: '1rem', sm: '1.25rem', md: '2.125rem' },
+                  lineHeight: 1.2,
+                  maxHeight: isMobile ? '2.4em' : 'auto',
+                  overflow: isMobile ? 'hidden' : 'visible'
                 }}
               >
                 {sample.name}
@@ -192,10 +214,12 @@ export function FullscreenStretchBoard({
                     marginBottom: 1,
                     flexWrap: 'wrap',
                     justifyContent: 'center',
-                    gap: 0.5
+                    gap: 0.5,
+                    maxHeight: isMobile ? '2rem' : 'auto',
+                    overflow: isMobile ? 'hidden' : 'visible'
                   }}
                 >
-                  {sample.tags.slice(0, 3).map((tag) => (
+                  {sample.tags.slice(0, isMobile ? 1 : 3).map((tag) => (
                     <Chip
                       key={tag}
                       label={tag}
@@ -203,21 +227,21 @@ export function FullscreenStretchBoard({
                       sx={{
                         backgroundColor: 'rgba(255, 255, 255, 0.15)',
                         color: getContrastTextColor(sample.color),
-                        fontSize: '0.7rem',
-                        height: '20px'
+                        fontSize: { xs: '0.6rem', md: '0.7rem' },
+                        height: { xs: '18px', md: '20px' }
                       }}
                     />
                   ))}
-                  {sample.tags.length > 3 && (
+                  {sample.tags.length > (isMobile ? 1 : 3) && (
                     <Typography
                       variant="caption"
                       sx={{
                         color: getContrastTextColor(sample.color),
                         opacity: 0.6,
-                        fontSize: '0.7rem'
+                        fontSize: { xs: '0.6rem', md: '0.7rem' }
                       }}
                     >
-                      +{sample.tags.length - 3}
+                      +{sample.tags.length - (isMobile ? 1 : 3)}
                     </Typography>
                   )}
                 </Stack>

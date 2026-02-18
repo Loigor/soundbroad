@@ -26,12 +26,14 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
       .get<Sample[]>('/api/samples')
       .then((res) => {
         if (!cancelled) {
+          console.debug('[SearchView] Samples from API:', res.data.map(s => ({ id: s.id, name: s.name, duration: s.duration_seconds, type: typeof s.duration_seconds })));
           // Populate missing durations for samples that don't have them
           return populateMissingDurations(res.data, (id) => `/api/samples/${id}/audio`);
         }
       })
       .then((samplesWithDuration) => {
         if (!cancelled && samplesWithDuration) {
+          console.debug('[SearchView] After populateMissingDurations:', samplesWithDuration.map(s => ({ id: s.id, name: s.name, duration: s.duration_seconds, type: typeof s.duration_seconds })));
           setSamples(samplesWithDuration);
         }
       })
@@ -99,6 +101,18 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
       await api.post(`/api/sample-groups/${groupId}/samples`, { sampleId });
     } catch (error) {
       console.error('Failed to add sample to group:', error);
+    }
+  };
+
+  const handleDeleteSample = async (sampleId: string) => {
+    if (!window.confirm('Are you sure you want to delete this sound? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await api.delete(`/api/samples/${sampleId}`);
+      setSamples((prev) => prev.filter(s => s.id !== sampleId));
+    } catch (error) {
+      console.error('Failed to delete sample:', error);
     }
   };
 
@@ -195,6 +209,7 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
             playingDurationSeconds={durationSeconds}
             groups={groups}
             onAddToGroup={handleAddToGroup}
+            onDelete={handleDeleteSample}
             sequenceMode={playMode === 'sequence'}
           />
         </Box>

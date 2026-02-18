@@ -69,10 +69,14 @@ export async function populateMissingDurations<T extends { id: string; duration_
   // Filter to only samples without duration
   const samplesNeedingDuration = results.filter(s => !s.duration_seconds || s.duration_seconds === 0);
   
+  console.debug(`[audioUtils] populateMissingDurations: ${results.length} total samples`);
+  console.debug(`[audioUtils] Samples with duration:`, results.filter(s => s.duration_seconds && s.duration_seconds > 0).map(s => ({ id: s.id, dur: s.duration_seconds })));
+  console.debug(`[audioUtils] Samples needing duration: ${samplesNeedingDuration.length}`);
+  
   if (samplesNeedingDuration.length === 0) {
     return results;
   }
-  
+
   console.debug(`[audioUtils] Fetching duration for ${samplesNeedingDuration.length} samples`);
   
   for (const sample of samplesNeedingDuration) {
@@ -90,6 +94,5 @@ export async function populateMissingDurations<T extends { id: string; duration_
       // Leave duration as null/0 if we can't get it, don't block the rest
     }
   }
-  
-  return results;
-}
+
+  console.debug(`[audioUtils] After fetch, samples with duration:`, results.filter(s => s.duration_seconds && s.duration_seconds > 0).map(s => ({ id: s.id, dur: s.duration_seconds })));

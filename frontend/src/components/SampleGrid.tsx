@@ -5,6 +5,9 @@ import {
   CardActionArea,
   CardContent,
   Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Grid,
   IconButton,
   Menu,
@@ -30,6 +33,7 @@ export interface SampleGridProps {
   editMode?: boolean;
   onRemoveFromSoundboard?: (sampleId: string) => void;
   onEditSound?: (sample: Sample) => void;
+  onDelete?: (sampleId: string) => Promise<void>;
 }
 
 export function SampleGrid({
@@ -44,10 +48,12 @@ export function SampleGrid({
   sequenceMode = false,
   editMode = false,
   onRemoveFromSoundboard,
-  onEditSound
+  onEditSound,
+  onDelete
 }: SampleGridProps) {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedSampleId, setSelectedSampleId] = useState<string | null>(null);
+  const [addToSoundboardDialogOpen, setAddToSoundboardDialogOpen] = useState(false);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, sampleId: string) => {
     event.stopPropagation();
@@ -60,13 +66,43 @@ export function SampleGrid({
     setSelectedSampleId(null);
   };
 
+  const handleOpenAddToSoundboardDialog = () => {
+    setAddToSoundboardDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const handleCloseAddToSoundboardDialog = () => {
+    setAddToSoundboardDialogOpen(false);
+  };
+
   const handleAddToGroup = async (groupId: string) => {
     if (selectedSampleId && onAddToGroup) {
       try {
         await onAddToGroup(selectedSampleId, groupId);
-        handleMenuClose();
+        handleCloseAddToSoundboardDialog();
       } catch (error) {
         console.error('Failed to add sample to group:', error);
+      }
+    }
+  };
+
+  const handleEdit = () => {
+    if (selectedSampleId) {
+      const sample = samples.find(s => s.id === selectedSampleId);
+      if (sample) {
+        onEditSound?.(sample);
+        handleMenuClose();
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    if (selectedSampleId && onDelete) {
+      try {
+        await onDelete(selectedSampleId);
+        handleMenuClose();
+      } catch (error) {
+        console.error('Failed to delete sample:', error);
       }
     }
   };
@@ -195,10 +231,17 @@ export function SampleGrid({
                   top: 4,
                   right: 4,
                   zIndex: 10,
+                  width: 36,
+                  height: 36,
+                  padding: 0,
+                  borderRadius: '50%',
                   backgroundColor: 'rgba(0,0,0,0.3)',
                   '&:hover': { backgroundColor: 'rgba(0,0,0,0.5)' },
                   color: 'white',
-                  fontSize: '18px'
+                  fontSize: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
                 ⋯
@@ -360,12 +403,37 @@ export function SampleGrid({
         open={Boolean(menuAnchor)}
         onClose={handleMenuClose}
       >
-        {groups.map((group) => (
-          <MenuItem key={group.id} onClick={() => handleAddToGroup(group.id)}>
-            Add to {group.name}
-          </MenuItem>
-        ))}
+        <MenuItem onClick={handleEdit}>Edit</MenuItem>
+        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete</MenuItem>
+        {groups.length > 0 && (
+          <MenuItem onClick={handleOpenAddToSoundboardDialog}>Add to soundboard</MenuItem>
+        )}
       </Menu>
+
+      <Dialog open={addToSoundboardDialogOpen} onClose={handleCloseAddToSoundboardDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>Add to soundboard</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={1}>
+            {groups.map((group) => (
+              <MenuItem
+                key={group.id}
+                onClick={() => handleAddToGroup(group.id)}
+                sx={{
+                  borderRadius: 1,
+                  py: 1,
+                  px: 1.5,
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                  }
+                }}
+              >
+                {group.name}
+              </MenuItem>
+            ))}
+          </Stack>
+        </DialogContent>
+      </Dialog>
     </Grid>
   );
 }

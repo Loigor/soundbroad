@@ -12,7 +12,9 @@ import {
   ListItemText,
   Stack,
   TextField,
-  Typography
+  Typography,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import { api } from '../api/client';
 import type { Sample, SampleGroup } from '../api/types';
@@ -24,6 +26,9 @@ import { recordPlay } from '../utils/playStats';
 import { populateMissingDurations } from '../utils/audioUtils';
 
 export function SoundboardsView({ volume = 100, audioControlRef, playMode, onProgressChange }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const sequencePlayerRef = useRef<React.ComponentRef<typeof SequencePlayer>>(null);
   const [groups, setGroups] = useState<SampleGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -250,6 +255,34 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
     setEditingSoundId(null);
   };
 
+  const handleDeleteSample = async (sampleId: string) => {
+    if (!window.confirm('Are you sure you want to delete this sound? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await api.delete(`/api/samples/${sampleId}`);
+      setSamples((prev) => prev.filter(s => s.id !== sampleId));
+    } catch (error) {
+      console.error('Failed to delete sample:', error);
+    }
+  };
+
+  const handleDeleteSoundboard = async () => {
+    if (!selectedGroupId) return;
+    if (!window.confirm('Are you sure you want to delete this soundboard? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await api.delete(`/api/sample-groups/${selectedGroupId}`);
+      setGroups((prev) => prev.filter((g) => g.id !== selectedGroupId));
+      setSelectedGroupId(null);
+      setSamples([]);
+      setFilteredSamples([]);
+    } catch (err) {
+      console.error('Failed to delete soundboard:', err);
+    }
+  };
+
   return (
     <>
       {fullscreenStretchMode && selectedGroupId && (
@@ -263,8 +296,8 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
         />
       )}
 
-      <Stack direction="row" spacing={3} sx={{ height: '100%' }}>
-        {!fullscreenStretchMode && (
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ height: '100%' }}>
+        {!fullscreenStretchMode && !isMobile && (
           <Box
             sx={{
               width: 260,
@@ -337,13 +370,13 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
                 onProgressChange={onProgressChange}
               />
             )}
-            <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, alignItems: { xs: 'stretch', sm: 'center' } }}>
               <TextField
                 size="small"
                 placeholder="Search sounds by name or tag..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ flex: 1, maxWidth: 400 }}
+                sx={{ flex: 1, maxWidth: { xs: '100%', sm: 400 } }}
               />
               {editMode && (
                 <TextField
@@ -351,7 +384,7 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
                   placeholder="Search to add sounds..."
                   value={addSoundSearchQuery}
                   onChange={(e) => handleSearchAddSounds(e.target.value)}
-                  sx={{ flex: 1, maxWidth: 400 }}
+                  sx={{ flex: 1, maxWidth: { xs: '100%', sm: 400 } }}
                 />
               )}
               <Button
@@ -362,15 +395,28 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
                   setAddSoundSearchQuery('');
                   setAddSoundSearchResults([]);
                 }}
+                fullWidth={isSmallMobile}
               >
                 {editMode ? 'Edit: On' : 'Edit'}
               </Button>
+              {editMode && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  onClick={handleDeleteSoundboard}
+                  fullWidth={isSmallMobile}
+                >
+                  Delete
+                </Button>
+              )}
               <Button
                 size="small"
                 variant="contained"
                 onClick={() => setFullscreenStretchMode(true)}
+                fullWidth={isSmallMobile}
               >
-                Full Screen Stretch
+                {isSmallMobile ? 'Fullscreen' : 'Full Screen Stretch'}
               </Button>
             </Stack>
 
@@ -416,6 +462,7 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
                 editMode={editMode}
                 onRemoveFromSoundboard={handleRemoveFromSoundboard}
                 onEditSound={(sound) => setEditingSoundId(sound.id)}
+                onDelete={handleDeleteSample}
                 sequenceMode={playMode === 'sequence'}
               />
             </Box>
