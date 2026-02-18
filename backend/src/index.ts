@@ -267,6 +267,133 @@ app.post(
   }
 );
 
+// Remove a sample from a group
+app.delete(
+  '/api/sample-groups/:groupId/samples/:sampleId',
+  async (req: Request, res: Response) => {
+    try {
+      const { groupId, sampleId } = req.params;
+      await db.query(
+        'DELETE FROM sample_group_samples WHERE group_id = $1 AND sample_id = $2',
+        [groupId, sampleId]
+      );
+      return res.status(204).end();
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Failed to remove sample from group' });
+    }
+  }
+);
+
+// Update sample (name, color)
+app.put('/api/samples/:id', async (req: Request, res: Response) => {
+  const client = await db.pool.connect();
+  try {
+    const { id } = req.params;
+    const { name, color, tags } = req.body as { name?: string; color?: string; tags?: string[] };
+
+    if (!name && color === undefined && !tags) {
+      return res.status(400).json({ error: 'Name, color, or tags required' });
+    }
+
+    // Check if sample exists
+    const checkRes = await client.query('SELECT id FROM samples WHERE id = $1', [id]);
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Sample not found' });
+    }
+
+    await client.query('BEGIN');
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramCount = 1;
+
+    if (name) {
+      updates.push(`name = $${paramCount}`);
+      params.push(name);
+      paramCount++;
+    }
+
+    if (color !== undefined) {
+      updates.push(`color = $${paramCount}`);
+      params.push(color || null);
+      paramCount++;
+    }
+
+    if (updates.length > 0) {
+      params.push(id);
+      await client.query(`UPDATE samples SET ${updates.join(', ')} WHERE id = $${paramCount}`, params);
+    }
+
+    // Handle tags if provided
+    if (tags) {
+      // Delete existing tags
+      await client.query('DELETE FROM sample_tags WHERE sample_id = $1', [id]);
+      
+      // Insert new tags
+      if (tags.length > 0) {
+        const tagValues = tags.map((tag, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(', ');
+        const tagParams = tags.flatMap((tag) => [id, tag]);
+        await client.query(
+          `INSERT INTO sample_tags (sample_id, tag) VALUES ${tagValues}`,
+          tagParams
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return res.status(204).end();
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to update sample' });
+  } finally {
+    client.release();
+  }
+});
+
+// Delete sample (file and database record)
+app.delete('/api/samples/:id', async (req: Request, res: Response) => {
+  const client = await db.pool.connect();
+  try {
+    const { id } = req.params;
+
+    // Get file path
+    const result = await client.query<{ file_path: string }>(
+      'SELECT file_path FROM samples WHERE id = $1',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Sample not found' });
+    }
+
+    const filePath = path.join(FILE_STORAGE_PATH, result.rows[0].file_path);
+
+    await client.query('BEGIN');
+
+    // Delete from database
+    await client.query('DELETE FROM sample_tags WHERE sample_id = $1', [id]);
+    await client.query('DELETE FROM sample_group_samples WHERE sample_id = $1', [id]);
+    await client.query('DELETE FROM samples WHERE id = $1', [id]);
+
+    await client.query('COMMIT');
+
+    // Delete file
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    return res.status(204).end();
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to delete sample' });
+  } finally {
+    client.release();
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Backend listening on port ${PORT}`);
 });

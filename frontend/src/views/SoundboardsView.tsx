@@ -17,6 +17,8 @@ import {
 import { api } from '../api/client';
 import type { Sample, SampleGroup } from '../api/types';
 import { SampleGrid } from '../components/SampleGrid';
+import { FullscreenStretchBoard } from '../components/FullscreenStretchBoard';
+import { SoundEditDialog } from '../components/SoundEditDialog';
 import { SequencePlayer, type SequenceClip, type SequencePlayerHandle } from '../components/SequencePlayer';
 import { recordPlay } from '../utils/playStats';
 import { populateMissingDurations } from '../utils/audioUtils';
@@ -37,7 +39,12 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState<number | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
-  const [fullscreenMode, setFullscreenMode] = useState(false);
+  const [fullscreenStretchMode, setFullscreenStretchMode] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editingSoundId, setEditingSoundId] = useState<string | null>(null);
+  const [addSoundSearchQuery, setAddSoundSearchQuery] = useState('');
+  const [addSoundSearchResults, setAddSoundSearchResults] = useState<Sample[]>([]);
+  const [loadingAddSounds, setLoadingAddSounds] = useState(false);
 
   useEffect(() => {
     setLoadingGroups(true);
@@ -184,18 +191,89 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
     void newAudio.play();
   };
 
+  const handleRemoveFromSoundboard = async (sampleId: string) => {
+    if (!selectedGroupId) return;
+    try {
+      await api.delete(`/api/sample-groups/${selectedGroupId}/samples/${sampleId}`);
+      setSamples((prev) => prev.filter((s) => s.id !== sampleId));
+    } catch (err) {
+      console.error('Failed to remove sound from soundboard:', err);
+    }
+  };
+
+  const handleAddToBoard = async (sampleId: string) => {
+    if (!selectedGroupId) return;
+    try {
+      await api.post(`/api/sample-groups/${selectedGroupId}/samples/${sampleId}`, {});
+      // Reload samples
+      setLoadingSamples(true);
+      const res = await api.get<Sample[]>('/api/samples', { params: { groupId: selectedGroupId } });
+      const samplesWithDuration = await populateMissingDurations(res.data, (id) => `/api/samples/${id}/audio`);
+      setSamples(samplesWithDuration);
+      setAddSoundSearchQuery('');
+      setAddSoundSearchResults([]);
+    } catch (err) {
+      console.error('Failed to add sound to soundboard:', err);
+    } finally {
+      setLoadingSamples(false);
+    }
+  };
+
+  const handleSearchAddSounds = async (query: string) => {
+    setAddSoundSearchQuery(query);
+    if (query.length < 2 || !selectedGroupId) {
+      setAddSoundSearchResults([]);
+      return;
+    }
+    setLoadingAddSounds(true);
+    try {
+      const res = await api.get<Sample[]>('/api/samples', { params: { search: query } });
+      // Filter out sounds already in the soundboard
+      const notInBoard = res.data.filter((s) => !samples.find((sample) => sample.id === s.id));
+      setAddSoundSearchResults(notInBoard);
+    } catch (err) {
+      console.error('Failed to search sounds:', err);
+    } finally {
+      setLoadingAddSounds(false);
+    }
+  };
+
+  const handleSoundUpdated = (updatedSound: Sample) => {
+    setSamples((prev) =>
+      prev.map((s) => (s.id === updatedSound.id ? updatedSound : s))
+    );
+    setEditingSoundId(null);
+  };
+
+  const handleSoundDeleted = (soundId: string) => {
+    setSamples((prev) => prev.filter((s) => s.id !== soundId));
+    setEditingSoundId(null);
+  };
+
   return (
-    <Stack direction="row" spacing={3} sx={{ height: '100%' }}>
-      {!fullscreenMode && (
-        <Box
-          sx={{
-            width: 260,
-            flexShrink: 0,
-            borderRight: '1px solid rgba(255,255,255,0.08)',
-            pr: 2,
-            overflow: 'auto'
-          }}
-        >
+    <>
+      {fullscreenStretchMode && selectedGroupId && (
+        <FullscreenStretchBoard
+          samples={filteredSamples}
+          currentlyPlayingId={currentlyPlayingId}
+          onPlay={handlePlay}
+          onClose={() => setFullscreenStretchMode(false)}
+          playingPositionSeconds={positionSeconds}
+          playingDurationSeconds={durationSeconds}
+        />
+      )}
+
+      <Stack direction="row" spacing={3} sx={{ height: '100%' }}>
+        {!fullscreenStretchMode && (
+          <Box
+            sx={{
+              width: 260,
+              flexShrink: 0,
+              borderRight: '1px solid rgba(255,255,255,0.08)',
+              pr: 2,
+              overflow: 'auto'
+            }}
+          >
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             Soundboards
@@ -267,14 +345,67 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
                 onChange={(e) => setSearchQuery(e.target.value)}
                 sx={{ flex: 1, maxWidth: 400 }}
               />
+              {editMode && (
+                <TextField
+                  size="small"
+                  placeholder="Search to add sounds..."
+                  value={addSoundSearchQuery}
+                  onChange={(e) => handleSearchAddSounds(e.target.value)}
+                  sx={{ flex: 1, maxWidth: 400 }}
+                />
+              )}
               <Button
                 size="small"
-                variant={fullscreenMode ? 'contained' : 'outlined'}
-                onClick={() => setFullscreenMode(!fullscreenMode)}
+                variant={editMode ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setEditMode(!editMode);
+                  setAddSoundSearchQuery('');
+                  setAddSoundSearchResults([]);
+                }}
               >
-                {fullscreenMode ? 'Fullscreen: On' : 'Fullscreen'}
+                {editMode ? 'Edit: On' : 'Edit'}
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => setFullscreenStretchMode(true)}
+              >
+                Full Screen Stretch
               </Button>
             </Stack>
+
+            {editMode && addSoundSearchResults.length > 0 && (
+              <Box sx={{ mb: 2, p: 1.5, backgroundColor: 'rgba(33, 150, 243, 0.08)', borderRadius: 1 }}>
+                <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+                  Search Results ({addSoundSearchResults.length})
+                </Typography>
+                <Stack spacing={1}>
+                  {addSoundSearchResults.map((sound) => (
+                    <Box
+                      key={sound.id}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1,
+                        backgroundColor: 'rgba(255,255,255,0.05)',
+                        borderRadius: 0.5
+                      }}
+                    >
+                      <Typography variant="body2">{sound.name}</Typography>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => handleAddToBoard(sound.id)}
+                      >
+                        Add
+                      </Button>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
             <Box sx={{ flex: 1, overflow: 'auto' }}>
               <SampleGrid
                 samples={filteredSamples}
@@ -282,13 +413,27 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
                 onPlay={playMode === 'sequence' ? handleAddToSequence : handlePlay}
                 playingPositionSeconds={positionSeconds}
                 playingDurationSeconds={durationSeconds}
-                scaleMode={fullscreenMode}
+                editMode={editMode}
+                onRemoveFromSoundboard={handleRemoveFromSoundboard}
+                onEditSound={(sound) => setEditingSoundId(sound.id)}
                 sequenceMode={playMode === 'sequence'}
               />
             </Box>
           </>
         )}
       </Box>
+
+      </Stack>
+
+      {editingSoundId && (
+        <SoundEditDialog
+          sound={samples.find((s) => s.id === editingSoundId) || null}
+          open={!!editingSoundId}
+          onClose={() => setEditingSoundId(null)}
+          onSave={handleSoundUpdated}
+          onDelete={handleSoundDeleted}
+        />
+      )}
 
       <Dialog open={creatingGroup} onClose={() => setCreatingGroup(false)} fullWidth maxWidth="xs">
         <DialogTitle>Create soundboard</DialogTitle>
@@ -310,7 +455,7 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
           </Button>
         </DialogActions>
       </Dialog>
-    </Stack>
+    </>
   );
 }
 

@@ -1,4 +1,4 @@
-import { Pool, QueryResult } from 'pg';
+import { Pool, QueryResult, QueryResultRow } from 'pg';
 
 const pool = new Pool({
   host: process.env.PGHOST || 'localhost',
@@ -8,7 +8,7 @@ const pool = new Pool({
   database: process.env.PGDATABASE || 'soundbroad'
 });
 
-export async function query<T = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+export async function query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
   const client = await pool.connect();
   try {
     const res = await client.query<T>(text, params);

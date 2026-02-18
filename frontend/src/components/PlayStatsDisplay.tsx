@@ -24,12 +24,14 @@ export function PlayStatsDisplay({ sampleId }: PlayStatsDisplayProps) {
           display: 'inline-block',
           px: 0.75,
           py: 0.25,
-          backgroundColor: 'rgba(33, 150, 243, 0.15)',
-          borderRadius: '12px',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(4px)',
+          borderRadius: '4px',
           cursor: 'help',
           transition: 'background-color 0.2s',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
           '&:hover': {
-            backgroundColor: 'rgba(33, 150, 243, 0.25)'
+            backgroundColor: 'rgba(0, 0, 0, 0.7)'
           }
         }}
       >
@@ -38,7 +40,7 @@ export function PlayStatsDisplay({ sampleId }: PlayStatsDisplayProps) {
           sx={{
             fontSize: '0.65rem',
             fontWeight: 600,
-            color: 'rgba(33, 150, 243, 0.9)',
+            color: 'rgba(255, 255, 255, 0.95)',
             whiteSpace: 'nowrap'
           }}
         >

@@ -1,11 +1,11 @@
 # Build stage
 FROM node:18-alpine AS builder
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm ci
+RUN npm ci --frozen-lockfile
 
 COPY . .
 
@@ -14,13 +14,20 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-RUN npm ci --only=production
+ENV NODE_ENV=production
 
-COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/migrations ./migrations
+COPY package*.json ./
+
+RUN npm ci --frozen-lockfile --production
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/migrations ./migrations
 
 EXPOSE 4000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:4000/api/sample-groups || exit 1
 
 CMD ["sh", "-c", "npm run migrate && node dist/index.js"]

@@ -9,6 +9,7 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Stack,
   Typography
 } from '@mui/material';
 import type { Sample, SampleGroup } from '../api/types';
@@ -26,6 +27,9 @@ export interface SampleGridProps {
   onAddToGroup?: (sampleId: string, groupId: string) => Promise<void>;
   scaleMode?: boolean;
   sequenceMode?: boolean;
+  editMode?: boolean;
+  onRemoveFromSoundboard?: (sampleId: string) => void;
+  onEditSound?: (sample: Sample) => void;
 }
 
 export function SampleGrid({
@@ -37,7 +41,10 @@ export function SampleGrid({
   groups = [],
   onAddToGroup,
   scaleMode = false,
-  sequenceMode = false
+  sequenceMode = false,
+  editMode = false,
+  onRemoveFromSoundboard,
+  onEditSound
 }: SampleGridProps) {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedSampleId, setSelectedSampleId] = useState<string | null>(null);
@@ -120,7 +127,66 @@ export function SampleGrid({
               position: 'relative'
             }}
           >
-            {groups.length > 0 && (
+            {editMode && (
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  zIndex: 10
+                }}
+              >
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditSound?.(sample);
+                  }}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    padding: 0,
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(33, 150, 243, 0.8)',
+                    '&:hover': { backgroundColor: 'rgba(33, 150, 243, 1)' },
+                    color: 'white',
+                    fontSize: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}
+                  title="Edit sound"
+                >
+                  ✎
+                </IconButton>
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveFromSoundboard?.(sample.id);
+                  }}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    padding: 0,
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(244, 67, 54, 0.8)',
+                    '&:hover': { backgroundColor: 'rgba(244, 67, 54, 1)' },
+                    color: 'white',
+                    fontSize: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}
+                  title="Remove from soundboard"
+                >
+                  ✕
+                </IconButton>
+              </Stack>
+            )}
+            {!editMode && groups.length > 0 && (
               <IconButton
                 size="small"
                 onClick={(e) => handleMenuOpen(e, sample.id)}
@@ -150,7 +216,8 @@ export function SampleGrid({
                   gap: 0.75,
                   padding: '12px',
                   '&:last-child': { paddingBottom: '12px' },
-                  color: getContrastTextColor(sample.color)
+                  color: getContrastTextColor(sample.color),
+                  position: 'relative'
                 }}
               >
                 <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600 }}>
@@ -212,27 +279,74 @@ export function SampleGrid({
                   )}
                 </Box>
 
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
-                  {sample.tags.slice(0, 3).map((tag) => (
-                    <Chip key={tag} label={tag} size="small" />
-                  ))}
-                  {sample.tags.length > 3 && (
-                    <Chip label={`+${sample.tags.length - 3}`} size="small" />
-                  )}
-                  <Chip 
-                    label={`⏱ ${formatTime(sample.duration_seconds || 0)}`} 
-                    size="small"
+                {/* Duration chip - below waveform */}
+                <Chip 
+                  label={`⏱ ${formatTime(sample.duration_seconds || 0)}`} 
+                  size="small"
+                  sx={{
+                    alignSelf: 'flex-start',
+                    backgroundColor: 'rgba(33, 150, 243, 0.2)',
+                    '& .MuiChip-label': {
+                      fontSize: '0.75rem',
+                      fontWeight: 500
+                    }
+                  }}
+                />
+
+                {/* Tags in bottom-left corner */}
+                {sample.tags.length > 0 && (
+                  <Box
                     sx={{
-                      backgroundColor: 'rgba(33, 150, 243, 0.2)',
-                      '& .MuiChip-label': {
-                        fontSize: '0.75rem',
-                        fontWeight: 500
-                      }
+                      position: 'absolute',
+                      bottom: 4,
+                      left: 4,
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 0.3,
+                      maxWidth: 'calc(100% - 60px)',
+                      zIndex: 3
                     }}
-                  />
-                  <Box sx={{ ml: 'auto' }}>
-                    <PlayStatsDisplay sampleId={sample.id} />
+                  >
+                    {sample.tags.slice(0, 2).map((tag) => (
+                      <Chip 
+                        key={tag} 
+                        label={tag} 
+                        size="small"
+                        sx={{
+                          height: '18px',
+                          '& .MuiChip-label': {
+                            fontSize: '0.65rem',
+                            padding: '0 4px'
+                          }
+                        }}
+                      />
+                    ))}
+                    {sample.tags.length > 2 && (
+                      <Chip 
+                        label={`+${sample.tags.length - 2}`} 
+                        size="small"
+                        sx={{
+                          height: '18px',
+                          '& .MuiChip-label': {
+                            fontSize: '0.65rem',
+                            padding: '0 4px'
+                          }
+                        }}
+                      />
+                    )}
                   </Box>
+                )}
+
+                {/* Play stats in bottom-right corner */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: 4,
+                    right: 4,
+                    zIndex: 5
+                  }}
+                >
+                  <PlayStatsDisplay sampleId={sample.id} />
                 </Box>
               </CardContent>
             </CardActionArea>
