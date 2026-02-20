@@ -18,6 +18,7 @@ export interface WaveformPreviewProps {
   currentTime?: number | null;
   duration?: number | null;
   progressColor?: string;
+  waveColor?: string;
 }
 
 export function WaveformPreview({ 
@@ -25,7 +26,8 @@ export function WaveformPreview({
   isPlaying = false, 
   currentTime = null,
   duration = null,
-  progressColor = 'rgba(33, 150, 243, 0.8)'
+  progressColor = 'rgba(33, 150, 243, 0.8)',
+  waveColor = 'rgba(255,255,255,0.35)'
 }: WaveformPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
@@ -37,7 +39,7 @@ export function WaveformPreview({
     const wavesurfer = WaveSurfer.create({
       container: containerRef.current,
       height: 56,
-      waveColor: 'rgba(255,255,255,0.35)',
+      waveColor: waveColor,
       progressColor: 'rgba(255,255,255,0)',
       cursorWidth: 0,
       barWidth: 2,

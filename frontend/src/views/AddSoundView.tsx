@@ -16,14 +16,29 @@ import {
   DialogContent,
   DialogActions,
   ToggleButton,
-  ToggleButtonGroup
+  ToggleButtonGroup,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { api } from '../api/client';
 import type { Sample, SampleGroup } from '../api/types';
 
+interface UploadedFile {
+  id: string;
+  file: File;
+  name: string;
+  durationSeconds: number | null;
+}
+
 export function AddSoundView() {
-  const [file, setFile] = useState<File | null>(null);
-  const [name, setName] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [tagInput, setTagInput] = useState<string[]>([]);
   const [tagText, setTagText] = useState('');
   const [allSamples, setAllSamples] = useState<Sample[]>([]);
@@ -34,7 +49,6 @@ export function AddSoundView() {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [color, setColor] = useState<string>('#424242');
 
   useEffect(() => {
@@ -58,62 +72,132 @@ export function AddSoundView() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [allSamples]);
 
-  const handleFileChange = (f: File | null) => {
-    setFile(f);
-    if (f && !name.trim()) {
-      const base = f.name.replace(/\.[^.]+$/, '');
-      setName(base);
-    }
-    if (f) {
-      const url = URL.createObjectURL(f);
+  const handleFileChange = (files: FileList | null) => {
+    if (!files) return;
+    
+    const newFiles: UploadedFile[] = [];
+    let filesProcessed = 0;
+
+    Array.from(files).forEach((file) => {
+      const id = `${Date.now()}-${Math.random()}`;
+      const base = file.name.replace(/\.[^.]+$/, '');
+      
+      const url = URL.createObjectURL(file);
       const audio = new Audio(url);
+      
       audio.onloadedmetadata = () => {
-        setDurationSeconds(audio.duration || null);
+        newFiles.push({
+          id,
+          file,
+          name: base,
+          durationSeconds: audio.duration || null
+        });
         URL.revokeObjectURL(url);
+        filesProcessed++;
+        
+        // Add all files once they're all processed
+        if (filesProcessed === Array.from(files).length) {
+          setUploadedFiles((prev) => [...prev, ...newFiles]);
+        }
       };
-    } else {
-      setDurationSeconds(null);
-    }
+      
+      // Fallback in case metadata loading fails
+      audio.onerror = () => {
+        newFiles.push({
+          id,
+          file,
+          name: base,
+          durationSeconds: null
+        });
+        URL.revokeObjectURL(url);
+        filesProcessed++;
+        
+        if (filesProcessed === Array.from(files).length) {
+          setUploadedFiles((prev) => [...prev, ...newFiles]);
+        }
+      };
+    });
+  };
+
+  const handleRemoveFile = (id: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const handleUpdateFileName = (id: string, newName: string) => {
+    setUploadedFiles((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, name: newName } : f))
+    );
   };
 
   const handleSubmit = async () => {
-    if (!file || !name.trim()) {
-      setErrorMessage('File and name are required.');
+    if (uploadedFiles.length === 0) {
+      setErrorMessage('Please add at least one sound.');
       return;
     }
+    
+    // Check all files have names
+    if (uploadedFiles.some((f) => !f.name.trim())) {
+      setErrorMessage('All sounds must have names.');
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    
     try {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('name', name.trim());
-      if (tagInput.length) {
-        form.append('tags', tagInput.join(','));
+      let successCount = 0;
+      let failureCount = 0;
+
+      // Upload all files
+      for (const uploadedFile of uploadedFiles) {
+        try {
+          const form = new FormData();
+          form.append('file', uploadedFile.file);
+          form.append('name', uploadedFile.name.trim());
+          
+          if (tagInput.length) {
+            form.append('tags', tagInput.join(','));
+          }
+          if (uploadedFile.durationSeconds != null) {
+            form.append('durationSeconds', String(uploadedFile.durationSeconds));
+          }
+          if (color) {
+            form.append('color', color);
+          }
+          if (groupId !== 'none') {
+            form.append('groupIds', groupId);
+          }
+          
+          await api.post('/api/samples', form, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          
+          successCount++;
+        } catch (e) {
+          console.error('Failed to upload:', uploadedFile.name, e);
+          failureCount++;
+        }
       }
-      if (durationSeconds != null) {
-        form.append('durationSeconds', String(durationSeconds));
+
+      // Show results
+      if (failureCount === 0) {
+        setSuccessMessage(`Successfully uploaded ${successCount} sound${successCount !== 1 ? 's' : ''}.`);
+      } else {
+        setSuccessMessage(
+          `Uploaded ${successCount} sound${successCount !== 1 ? 's' : ''}, failed: ${failureCount}.`
+        );
       }
-      if (color) {
-        form.append('color', color);
-      }
-      if (groupId !== 'none') {
-        form.append('groupIds', groupId);
-      }
-      await api.post('/api/samples', form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setSuccessMessage('Sample uploaded.');
-      setFile(null);
-      setName('');
+
+      // Reset form
+      setUploadedFiles([]);
       setTagInput([]);
       setTagText('');
       setGroupId('none');
-      setDurationSeconds(null);
       setColor('#424242');
     } catch (e) {
       console.error(e);
-      setErrorMessage('Failed to upload sample.');
+      setErrorMessage('Failed to upload sounds.');
     } finally {
       setSubmitting(false);
     }
@@ -135,29 +219,76 @@ export function AddSoundView() {
   };
 
   return (
-    <Box sx={{ maxWidth: 600 }}>
+    <Box sx={{ maxWidth: 900 }}>
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-        Add sound
+        Add sounds
       </Typography>
 
       <Stack spacing={2}>
+        {/* File upload button */}
         <Button variant="outlined" component="label">
-          {file ? `File: ${file.name}` : 'Choose audio file'}
+          Add audio files
           <input
             type="file"
             accept="audio/*"
+            multiple
             hidden
-            onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+            onChange={(e) => handleFileChange(e.target.files)}
           />
         </Button>
 
-        <TextField
-          label="Name"
-          fullWidth
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          helperText="Defaults to file name, but you can edit."
-        />
+        {/* Uploaded files table */}
+        {uploadedFiles.length > 0 && (
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                  <TableCell sx={{ fontWeight: 600 }}>File</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Duration</TableCell>
+                  <TableCell sx={{ width: 50 }}></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {uploadedFiles.map((uploadedFile) => (
+                  <TableRow key={uploadedFile.id}>
+                    <TableCell sx={{ fontSize: '0.875rem', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {uploadedFile.file.name}
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        size="small"
+                        value={uploadedFile.name}
+                        onChange={(e) => handleUpdateFileName(uploadedFile.id, e.target.value)}
+                        fullWidth
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '0.875rem' }}>
+                      {uploadedFile.durationSeconds != null
+                        ? `${Math.round(uploadedFile.durationSeconds)}s`
+                        : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleRemoveFile(uploadedFile.id)}
+                        sx={{ color: 'error.main' }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {/* Shared controls for all uploads */}
+        <Typography variant="subtitle2" sx={{ mt: uploadedFiles.length > 0 ? 1 : 0, fontWeight: 600 }}>
+          {uploadedFiles.length > 0 ? 'Apply to all sounds:' : 'Configure for sounds:'}
+        </Typography>
 
         <Autocomplete
           multiple
@@ -253,9 +384,9 @@ export function AddSoundView() {
           <Button
             variant="contained"
             onClick={handleSubmit}
-            disabled={submitting || !file || !name.trim()}
+            disabled={submitting || uploadedFiles.length === 0}
           >
-            {submitting ? 'Uploading…' : 'Add sound'}
+            {submitting ? 'Uploading…' : `Upload ${uploadedFiles.length} sound${uploadedFiles.length !== 1 ? 's' : ''}`}
           </Button>
         </Box>
       </Stack>

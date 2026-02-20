@@ -3,6 +3,7 @@ import { Box, CircularProgress, TextField } from '@mui/material';
 import { api } from '../api/client';
 import type { Sample, SampleGroup } from '../api/types';
 import { SampleGrid } from '../components/SampleGrid';
+import { SoundEditDialog } from '../components/SoundEditDialog';
 import { SequencePlayer, type SequenceClip, type SequencePlayerHandle } from '../components/SequencePlayer';
 import { recordPlay } from '../utils/playStats';
 import { populateMissingDurations } from '../utils/audioUtils';
@@ -18,6 +19,7 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState<number | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [editingSoundId, setEditingSoundId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +118,18 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
     }
   };
 
+  const handleSoundUpdated = (updatedSound: Sample) => {
+    setSamples((prev) =>
+      prev.map((s) => (s.id === updatedSound.id ? updatedSound : s))
+    );
+    setEditingSoundId(null);
+  };
+
+  const handleSoundDeleted = (soundId: string) => {
+    setSamples((prev) => prev.filter((s) => s.id !== soundId));
+    setEditingSoundId(null);
+  };
+
   const handleAddToSequence = (sample: Sample) => {
     const newClip: SequenceClip = {
       id: `${sample.id}-${Date.now()}`,
@@ -209,10 +223,21 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
             playingDurationSeconds={durationSeconds}
             groups={groups}
             onAddToGroup={handleAddToGroup}
+            onEditSound={(sound) => setEditingSoundId(sound.id)}
             onDelete={handleDeleteSample}
             sequenceMode={playMode === 'sequence'}
           />
         </Box>
+      )}
+
+      {editingSoundId && (
+        <SoundEditDialog
+          sound={samples.find((s) => s.id === editingSoundId) || null}
+          open={!!editingSoundId}
+          onClose={() => setEditingSoundId(null)}
+          onSave={handleSoundUpdated}
+          onDelete={handleSoundDeleted}
+        />
       )}
     </Box>
   );

@@ -7,6 +7,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
+  IconButton,
   List,
   ListItemButton,
   ListItemText,
@@ -47,6 +49,7 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
   const [fullscreenStretchMode, setFullscreenStretchMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingSoundId, setEditingSoundId] = useState<string | null>(null);
+  const [soundboardsDrawerOpen, setSoundboardsDrawerOpen] = useState(false);
   const [addSoundSearchQuery, setAddSoundSearchQuery] = useState('');
   const [addSoundSearchResults, setAddSoundSearchResults] = useState<Sample[]>([]);
   const [loadingAddSounds, setLoadingAddSounds] = useState(false);
@@ -297,6 +300,7 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
       )}
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ height: '100%' }}>
+        {/* Desktop sidebar - always visible on desktop, hidden on mobile */}
         {!fullscreenStretchMode && !isMobile && (
           <Box
             sx={{
@@ -340,6 +344,49 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
         </Box>
       )}
 
+      {/* Mobile sidebar drawer */}
+      <Drawer
+        anchor="left"
+        open={soundboardsDrawerOpen}
+        onClose={() => setSoundboardsDrawerOpen(false)}
+      >
+        <Box sx={{ width: 280, pt: 2 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1} px={2}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Soundboards
+            </Typography>
+            <Button size="small" variant="outlined" onClick={() => setCreatingGroup(true)}>
+              New
+            </Button>
+          </Stack>
+          {loadingGroups ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : (
+            <List dense>
+              {groups.map((g) => (
+                <ListItemButton
+                  key={g.id}
+                  selected={g.id === selectedGroupId}
+                  onClick={() => {
+                    setSelectedGroupId(g.id);
+                    setSoundboardsDrawerOpen(false);
+                  }}
+                >
+                  <ListItemText primary={g.name} />
+                </ListItemButton>
+              ))}
+              {groups.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1, ml: 1 }}>
+                  No soundboards yet. Create one to get started.
+                </Typography>
+              )}
+            </List>
+          )}
+        </Box>
+      </Drawer>
+
       <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {!selectedGroupId ? (
           <Box
@@ -371,6 +418,15 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
               />
             )}
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, alignItems: { xs: 'stretch', sm: 'center' } }}>
+              {isMobile && (
+                <Button
+                  variant="outlined"
+                  onClick={() => setSoundboardsDrawerOpen(true)}
+                  fullWidth={isSmallMobile}
+                >
+                  Soundboards
+                </Button>
+              )}
               <TextField
                 size="small"
                 placeholder="Search sounds by name or tag..."

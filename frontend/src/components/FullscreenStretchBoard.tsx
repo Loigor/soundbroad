@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { Box, Grid, Button, Stack, Typography, keyframes, Chip, useMediaQuery, useTheme } from '@mui/material';
 import type { Sample } from '../api/types';
-import { getContrastTextColor } from '../utils/colorTheory';
+import { getContrastTextColor, getWaveformColor } from '../utils/colorTheory';
 import { PlayStatsDisplay } from './PlayStatsDisplay';
+import { WaveformPreview } from './WaveformPreview';
 
 // Blinking animation for when sound is near the end
 const blinkAnimation = keyframes`
@@ -246,6 +247,28 @@ export function FullscreenStretchBoard({
                   )}
                 </Stack>
               )}
+
+              {/* Waveform Preview */}
+              <Box
+                sx={{
+                  width: '90%',
+                  height: { xs: '40px', md: '60px' },
+                  marginBottom: 1.5,
+                  borderRadius: 1,
+                  backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                  padding: '4px',
+                  overflow: 'hidden'
+                }}
+              >
+                <WaveformPreview
+                  audioUrl={`/api/samples/${sample.id}/audio`}
+                  isPlaying={isPlaying}
+                  currentTime={isPlaying ? position : null}
+                  duration={duration}
+                  waveColor={getWaveformColor(sample.color)}
+                  progressColor={getWaveformColor(sample.color)}
+                />
+              </Box>
 
               {isPlaying && (
                 <Stack spacing={1.5} sx={{ alignItems: 'center', width: '100%' }}>

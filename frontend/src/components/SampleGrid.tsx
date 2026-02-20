@@ -107,38 +107,6 @@ export function SampleGrid({
     }
   };
 
-  // Helper function to determine if a color is light or dark
-  const isLightColor = (color: string | null | undefined): boolean => {
-    if (!color) return false;
-    
-    // Parse hex color
-    const hex = color.replace('#', '');
-    if (hex.length !== 6) return false;
-    
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    
-    // Calculate luminance
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return luminance > 0.5;
-  };
-
-  // Get text color based on background
-  const getTextColor = (bgColor: string | null | undefined): string => {
-    return isLightColor(bgColor) ? 'rgba(0, 0, 0, 0.87)' : 'rgba(255, 255, 255, 0.87)';
-  };
-
-  // Get progress indicator color - use contrasting color
-  const getProgressColor = (bgColor: string | null | undefined): string => {
-    const light = isLightColor(bgColor);
-    if (light) {
-      return 'rgba(0, 0, 0, 0.7)'; // Dark on light
-    } else {
-      return 'rgba(255, 255, 255, 0.9)'; // White on dark or default gray
-    }
-  };
-
   return (
     <Grid container spacing={2}>
       {samples.map((sample) => {
@@ -163,66 +131,7 @@ export function SampleGrid({
               position: 'relative'
             }}
           >
-            {editMode && (
-              <Stack
-                direction="row"
-                spacing={0.5}
-                sx={{
-                  position: 'absolute',
-                  top: 4,
-                  right: 4,
-                  zIndex: 10
-                }}
-              >
-                <IconButton
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEditSound?.(sample);
-                  }}
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    padding: 0,
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(33, 150, 243, 0.8)',
-                    '&:hover': { backgroundColor: 'rgba(33, 150, 243, 1)' },
-                    color: 'white',
-                    fontSize: '18px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}
-                  title="Edit sound"
-                >
-                  ✎
-                </IconButton>
-                <IconButton
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveFromSoundboard?.(sample.id);
-                  }}
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    padding: 0,
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(244, 67, 54, 0.8)',
-                    '&:hover': { backgroundColor: 'rgba(244, 67, 54, 1)' },
-                    color: 'white',
-                    fontSize: '18px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}
-                  title="Remove from soundboard"
-                >
-                  ✕
-                </IconButton>
-              </Stack>
-            )}
-            {!editMode && groups.length > 0 && (
+            {(editMode || groups.length > 0) && (
               <IconButton
                 size="small"
                 onClick={(e) => handleMenuOpen(e, sample.id)}
@@ -273,7 +182,8 @@ export function SampleGrid({
                     isPlaying={currentlyPlayingId === sample.id}
                     currentTime={currentlyPlayingId === sample.id ? playingPositionSeconds : null}
                     duration={currentlyPlayingId === sample.id ? playingDurationSeconds : null}
-                    progressColor={getProgressColor(sample.color)}
+                    waveColor={getWaveformColor(sample.color)}
+                    progressColor={getWaveformColor(sample.color)}
                   />
                   
                   {currentlyPlayingId === sample.id && (
@@ -403,9 +313,19 @@ export function SampleGrid({
         open={Boolean(menuAnchor)}
         onClose={handleMenuClose}
       >
-        <MenuItem onClick={handleEdit}>Edit</MenuItem>
-        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete</MenuItem>
-        {groups.length > 0 && (
+        {onEditSound && <MenuItem onClick={handleEdit}>Edit</MenuItem>}
+        {editMode && onRemoveFromSoundboard && (
+          <MenuItem onClick={() => {
+            if (selectedSampleId) {
+              onRemoveFromSoundboard(selectedSampleId);
+              handleMenuClose();
+            }
+          }}>
+            Remove from soundboard
+          </MenuItem>
+        )}
+        {onDelete && <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete</MenuItem>}
+        {!editMode && groups.length > 0 && (
           <MenuItem onClick={handleOpenAddToSoundboardDialog}>Add to soundboard</MenuItem>
         )}
       </Menu>
