@@ -4,6 +4,9 @@
  * No external dependencies - all calculations done in pure TypeScript
  */
 
+const Charcoal = 'rgba(33, 36, 42, 1)';
+const Whitesmoke = 'rgba(245, 245, 245, 1)';
+
 /**
  * Convert hex color to RGB
  */
@@ -158,10 +161,10 @@ export const isLightColor = (color: string | null | undefined): boolean => {
  * Uses contrast ratio calculations for accessibility (WCAG standards)
  */
 export const getContrastTextColor = (bgColor: string | null | undefined): string => {
-  if (!bgColor) return 'rgba(255, 255, 255, 0.87)';
+  if (!bgColor) return Whitesmoke;
 
   const rgb = parseColor(bgColor);
-  if (!rgb) return 'rgba(255, 255, 255, 0.87)';
+  if (!rgb) return Whitesmoke;
 
   const bgLuminance = getLuminance(rgb[0], rgb[1], rgb[2]);
   const whiteLuminance = getLuminance(255, 255, 255);
@@ -170,71 +173,69 @@ export const getContrastTextColor = (bgColor: string | null | undefined): string
   const contrastWhite = getContrastRatio(bgLuminance, whiteLuminance);
   const contrastBlack = getContrastRatio(bgLuminance, blackLuminance);
 
-  return contrastBlack > contrastWhite ? 'rgba(0, 0, 0, 0.87)' : 'rgba(255, 255, 255, 0.87)';
+  return contrastBlack > contrastWhite ? Charcoal : Whitesmoke;
 };
 
 /**
- * Get a complementary waveform color based on background
- * Uses color theory to pick a color that contrasts well visually
+ * Get a waveform color that visually contrasts with the background
+ * while staying within the same hue family (e.g. orange bg → dark or light orange waveform).
+ * Uses WCAG AA contrast threshold (4.5:1).
  */
 export const getWaveformColor = (bgColor: string | null | undefined): string => {
-  if (!bgColor) return 'rgba(33, 150, 243, 0.8)';
+  if (!bgColor) return '#2196f3';
 
   const rgb = parseColor(bgColor);
-  if (!rgb) return 'rgba(33, 150, 243, 0.8)';
+  if (!rgb) return '#2196f3';
 
-  const [h, s, v] = rgbToHsv(rgb[0], rgb[1], rgb[2]);
-  const luminance = getLuminance(rgb[0], rgb[1], rgb[2]);
+  const bgLuminance = getLuminance(rgb[0], rgb[1], rgb[2]);
+  const [h, s] = rgbToHsv(rgb[0], rgb[1], rgb[2]);
 
-  // Calculate complementary hue
-  const complementaryHue = (h + 180) % 360;
+  const MIN_CONTRAST = 4.5; // WCAG AA
+  const isLightBg = bgLuminance > 0.5;
 
-  let waveformRgb: [number, number, number];
-
-  if (luminance > 0.7) {
-    // Light background - use darker, more saturated waveform
-    waveformRgb = hsvToRgb(complementaryHue, 70, 60);
-  } else if (luminance < 0.3) {
-    // Dark background - use lighter, brighter waveform
-    waveformRgb = hsvToRgb(complementaryHue, 40, 90);
-  } else {
-    // Mid-tone background
-    const targetS = Math.min(100, s + 20);
-    waveformRgb = hsvToRgb(complementaryHue, targetS, 80);
+  // Achromatic backgrounds have no meaningful hue; contrast with a plain gray.
+  if (s < 15) {
+    const contrastV = isLightBg ? 20 : 80;
+    const [r, g, b] = hsvToRgb(0, 0, contrastV);
+    return rgbToHex(r, g, b);
   }
 
-  return rgbToHex(waveformRgb[0], waveformRgb[1], waveformRgb[2]);
+  // Scan toward lighter tints of the same hue (high V, reduced S → pale version).
+  const findLighterContrast = (): string | null => {
+    for (let v = 80; v <= 100; v += 2) {
+      const progress = (v - 80) / 20;
+      const targetS = Math.max(20, s * (1 - progress * 0.6));
+      const candidate = hsvToRgb(h, targetS, v);
+      if (getContrastRatio(bgLuminance, getLuminance(...candidate)) >= MIN_CONTRAST) {
+        return rgbToHex(...candidate);
+      }
+    }
+    return null;
+  };
+
+  // Scan toward darker shades of the same hue (low V, boosted S → rich dark version).
+  const findDarkerContrast = (): string | null => {
+    for (let v = 45; v >= 0; v -= 2) {
+      const targetS = Math.min(100, s + (45 - v) * 0.4);
+      const candidate = hsvToRgb(h, targetS, v);
+      if (getContrastRatio(bgLuminance, getLuminance(...candidate)) >= MIN_CONTRAST) {
+        return rgbToHex(...candidate);
+      }
+    }
+    return null;
+  };
+
+  const result = isLightBg
+    ? (findDarkerContrast() ?? findLighterContrast())
+    : (findLighterContrast() ?? findDarkerContrast());
+
+  if (result) return result;
+
+  // Fallback: push to the extreme of the hue family for guaranteed contrast.
+  const [fr, fg, fb] = hsvToRgb(h, Math.min(s + 20, 100), isLightBg ? 10 : 95);
+  return rgbToHex(fr, fg, fb);
 };
 
-/**
- * Get a highlighted/accent color for UI elements
- * Analogous color scheme - next to the waveform color on color wheel
- */
-export const getAccentColor = (bgColor: string | null | undefined): string => {
-  if (!bgColor) return 'rgba(76, 175, 80, 0.8)';
-
-  const rgb = parseColor(bgColor);
-  if (!rgb) return 'rgba(76, 175, 80, 0.8)';
-
-  const [h, s, v] = rgbToHsv(rgb[0], rgb[1], rgb[2]);
-  const luminance = getLuminance(rgb[0], rgb[1], rgb[2]);
-
-  // Get analogous hue (30 degrees away)
-  const analogousHue = (h + 30) % 360;
-
-  let accentRgb: [number, number, number];
-
-  if (luminance > 0.7) {
-    accentRgb = hsvToRgb(analogousHue, 70, 60);
-  } else if (luminance < 0.3) {
-    accentRgb = hsvToRgb(analogousHue, 40, 90);
-  } else {
-    const targetS = Math.min(100, s + 10);
-    accentRgb = hsvToRgb(analogousHue, targetS, 80);
-  }
-
-  return rgbToHex(accentRgb[0], accentRgb[1], accentRgb[2]);
-};
 
 /**
  * Get a red/warning color that contrasts with background

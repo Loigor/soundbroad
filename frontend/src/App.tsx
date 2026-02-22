@@ -43,7 +43,7 @@ function App() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
-  
+
   const [tab, setTab] = useState<MainTab>('search');
   const [playMode, setPlayMode] = useState<PlayMode>('instant');
   const [volume, setVolume] = useState(100);
@@ -94,22 +94,22 @@ function App() {
       <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
-            <img 
-              src="/logo-favicon.svg" 
-              alt="Soundbroad logo" 
+            <img
+              src="/logo-favicon.svg"
+              alt="Soundbroad logo"
               style={{ height: 36, width: 36 }}
             />
             <Typography variant="h6" sx={{ fontWeight: 600, display: { xs: 'none', sm: 'inline' } }}>
               Soundbroad
             </Typography>
           </Box>
-          
+
           <Tabs
             value={tab}
             onChange={(_e, value) => setTab(value)}
             textColor="inherit"
             indicatorColor="primary"
-            sx={{ flex: 1, justifyContent: 'center' }}
+            sx={{ flex: 1, justifyContent: 'center', margin: '0 0 0 2em' }}
           >
             <Tab value="search" label={isMobile ? "Search" : "Search"} />
             <Tab value="soundboards" label={isMobile ? "Boards" : "Soundboards"} />
@@ -118,15 +118,15 @@ function App() {
 
           <Box sx={{ width: 36 }} />
         </Toolbar>
-        
+
         {/* Playback progress indicator */}
         {totalDuration > 0 && (
           <Box sx={{ px: 2, pb: 1 }}>
-            <LinearProgress 
-              variant="determinate" 
+            <LinearProgress
+              variant="determinate"
               value={progressPercent}
-              sx={{ 
-                height: 8, 
+              sx={{
+                height: 8,
                 borderRadius: 1,
                 backgroundColor: isNearEnd ? 'rgba(255, 100, 100, 0.2)' : 'rgba(255, 255, 255, 0.1)',
                 '& .MuiLinearProgress-bar': {
@@ -212,7 +212,7 @@ function App() {
               onChange={(_e, newValue) => setVolume(newValue as number)}
               min={0}
               max={100}
-              sx={{ 
+              sx={{
                 flex: 1,
                 minWidth: 60,
                 '& .MuiSlider-thumb': {
