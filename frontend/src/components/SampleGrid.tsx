@@ -13,6 +13,7 @@ import {
   Menu,
   MenuItem,
   Stack,
+  Tooltip,
   Typography
 } from '@mui/material';
 import type { Sample, SampleGroup } from '../api/types';
@@ -165,19 +166,37 @@ export function SampleGrid({
                   flex: 1,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 0.75,
-                  padding: '12px',
+                  gap: 0.95,
+                  padding: '1em 1em 1.5em 1em',
                   '&:last-child': { paddingBottom: '12px' },
                   color: getContrastTextColor(sample.color),
                   position: 'relative'
                 }}
               >
-                <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600 }}>
-                  {sample.name}
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Tooltip title={sample.name} placement="top-start">
+                  <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600 }}>
+                    {sample.name}
+                  </Typography>
+                </Tooltip>
+                {/* Duration chip - below waveform */}
+                <Chip
+                  label={`⏱ ${formatTime(sample.duration_seconds || 0)}`}
+                  size="small"
+                  sx={{
+                    backgroundColor: 'rgba(33, 150, 243, 0.4)',
+                    border: '1px solid #21242A',
+                    '& .MuiChip-label': {
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      color: getContrastTextColor(sample.color)
+                    }
+                  }}
+                />
+                </Box>
 
                 <Box sx={{ position: 'relative', minHeight: 56, display: 'flex', alignItems: 'center' }}>
-                  <WaveformPreview 
+                  <WaveformPreview
                     audioUrl={`/api/samples/${sample.id}/audio`}
                     isPlaying={currentlyPlayingId === sample.id}
                     currentTime={currentlyPlayingId === sample.id ? playingPositionSeconds : null}
@@ -185,12 +204,13 @@ export function SampleGrid({
                     waveColor={getWaveformColor(sample.color)}
                     progressColor={getWaveformColor(sample.color)}
                   />
-                  
+
                   {currentlyPlayingId === sample.id && (
                     <Box
                       sx={{
                         position: 'absolute',
-                        bottom: 0,
+                        bottom: '50%',
+                        transform: 'translateY(50%)',
                         left: 0,
                         right: 0,
                         display: 'flex',
@@ -206,16 +226,16 @@ export function SampleGrid({
                     >
                       <Typography
                         variant="caption"
-                        sx={{ 
+                        sx={{
                           fontWeight: 500,
                           color: 'rgba(255, 255, 255, 0.9)'
                         }}
                       >
                         Playing…
                       </Typography>
-                      <Typography 
-                        variant="caption" 
-                        sx={{ 
+                      <Typography
+                        variant="caption"
+                        sx={{
                           color: 'rgba(255, 255, 255, 0.7)',
                           fontSize: '0.7rem'
                         }}
@@ -232,41 +252,28 @@ export function SampleGrid({
                   )}
                 </Box>
 
-                {/* Duration chip - below waveform */}
-                <Chip 
-                  label={`⏱ ${formatTime(sample.duration_seconds || 0)}`} 
-                  size="small"
-                  sx={{
-                    alignSelf: 'flex-start',
-                    backgroundColor: 'rgba(33, 150, 243, 0.2)',
-                    '& .MuiChip-label': {
-                      fontSize: '0.75rem',
-                      fontWeight: 500
-                    }
-                  }}
-                />
 
                 {/* Tags in bottom-left corner */}
                 {sample.tags.length > 0 && (
                   <Box
                     sx={{
-                      position: 'absolute',
                       bottom: 4,
                       left: 4,
                       display: 'flex',
                       flexWrap: 'wrap',
                       gap: 0.3,
-                      maxWidth: 'calc(100% - 60px)',
-                      zIndex: 3
+                      zIndex: 3,
+                      margin: '1em 0 0 0'
                     }}
                   >
                     {sample.tags.slice(0, 2).map((tag) => (
-                      <Chip 
-                        key={tag} 
-                        label={tag} 
+                      <Chip
+                        key={tag}
+                        label={tag}
                         size="small"
                         sx={{
                           height: '18px',
+                          color: getContrastTextColor(sample.color),
                           '& .MuiChip-label': {
                             fontSize: '0.65rem',
                             padding: '0 4px'
@@ -275,11 +282,12 @@ export function SampleGrid({
                       />
                     ))}
                     {sample.tags.length > 2 && (
-                      <Chip 
-                        label={`+${sample.tags.length - 2}`} 
+                      <Chip
+                        label={`+${sample.tags.length - 2}`}
                         size="small"
                         sx={{
                           height: '18px',
+                          color: getContrastTextColor(sample.color),
                           '& .MuiChip-label': {
                             fontSize: '0.65rem',
                             padding: '0 4px'
