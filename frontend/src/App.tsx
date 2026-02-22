@@ -151,7 +151,7 @@ function App() {
       >
         <Container maxWidth="lg" sx={{ height: '100%', px: isMobile ? 1 : undefined }}>
           {tab === 'search' && <SearchView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} />}
-          {tab === 'soundboards' && <SoundboardsView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} />}
+          {tab === 'soundboards' && <SoundboardsView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} onPlayModeChange={setPlayMode} />}
           {tab === 'add' && <AddSoundView />}
         </Container>
       </Box>

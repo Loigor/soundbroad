@@ -13,3 +13,15 @@ export interface SampleGroup {
   created_at: string;
 }
 
+export interface SavedSequenceItem {
+  sampleId: string;
+}
+
+export interface Sequence {
+  id: string;
+  group_id: string;
+  name: string;
+  sequence_data: SavedSequenceItem[];
+  created_at: string;
+}
+

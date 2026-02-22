@@ -16,19 +16,22 @@ import {
   TextField,
   Typography,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Grid
 } from '@mui/material';
 import { api } from '../api/client';
-import type { Sample, SampleGroup } from '../api/types';
+import type { Sample, SampleGroup, Sequence } from '../api/types';
 import { SampleGrid } from '../components/SampleGrid';
 import { FullscreenStretchBoard } from '../components/FullscreenStretchBoard';
 import { SoundEditDialog } from '../components/SoundEditDialog';
 import { SequencePlayer, type SequenceClip, type SequencePlayerHandle } from '../components/SequencePlayer';
+import { SaveSequenceDialog } from '../components/SaveSequenceDialog';
+import { SavedSequenceCard } from '../components/SavedSequenceCard';
 import { recordPlay } from '../utils/playStats';
 import { populateMissingDurations } from '../utils/audioUtils';
 import { audioPreloader } from '../utils/audioPreloader';
 
-export function SoundboardsView({ volume = 100, audioControlRef, playMode, onProgressChange, enablePreload = true }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void; enablePreload?: boolean }) {
+export function SoundboardsView({ volume = 100, audioControlRef, playMode, onProgressChange, enablePreload = true, onPlayModeChange }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void; enablePreload?: boolean; onPlayModeChange?: (mode: 'instant' | 'sequence') => void }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -54,6 +57,10 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
   const [addSoundSearchQuery, setAddSoundSearchQuery] = useState('');
   const [addSoundSearchResults, setAddSoundSearchResults] = useState<Sample[]>([]);
   const [loadingAddSounds, setLoadingAddSounds] = useState(false);
+  const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [loadingSequences, setLoadingSequences] = useState(false);
+  const [saveSequenceDialogOpen, setSaveSequenceDialogOpen] = useState(false);
+  const [loadedSequenceId, setLoadedSequenceId] = useState<string | null>(null);
 
   useEffect(() => {
     setLoadingGroups(true);
@@ -85,6 +92,22 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
       })
       .finally(() => setLoadingSamples(false));
   }, [selectedGroupId, enablePreload]);
+
+  useEffect(() => {
+    if (!selectedGroupId) {
+      setSequences([]);
+      return;
+    }
+    setLoadingSequences(true);
+    api
+      .get<Sequence[]>(`/api/sample-groups/${selectedGroupId}/sequences`)
+      .then((res) => setSequences(res.data))
+      .catch(err => {
+        console.error('Failed to load sequences:', err);
+        setSequences([]);
+      })
+      .finally(() => setLoadingSequences(false));
+  }, [selectedGroupId]);
 
   useEffect(() => {
     const query = searchQuery.toLowerCase();
@@ -184,6 +207,7 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
 
   const handleClearSequence = () => {
     setSequenceClips([]);
+    setLoadedSequenceId(null);
   };
 
   const handlePlay = (sample: Sample) => {
@@ -300,6 +324,71 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
       setFilteredSamples([]);
     } catch (err) {
       console.error('Failed to delete soundboard:', err);
+    }
+  };
+
+  const handleSaveSequence = async () => {
+    if (!selectedGroupId) return;
+    setLoadingSequences(true);
+    try {
+      const res = await api.get<Sequence[]>(`/api/sample-groups/${selectedGroupId}/sequences`);
+      setSequences(res.data);
+      // Clear loaded sequence ID after successful save so we're ready for next save
+      setLoadedSequenceId(null);
+    } catch (err) {
+      console.error('Failed to reload sequences:', err);
+    } finally {
+      setLoadingSequences(false);
+    }
+  };
+
+  const handleLoadSequence = (sequence: Sequence) => {
+    // Switch to sequence mode if currently in instant mode
+    if (playMode === 'instant' && onPlayModeChange) {
+      onPlayModeChange('sequence');
+    }
+
+    // Convert saved sequence format to SequenceClip format used by SequencePlayer
+    const clips = sequence.sequence_data
+      .map((clip, index) => {
+        const sample = samples.find(s => s.id === clip.sampleId);
+        if (!sample) return null;
+        return {
+          id: `${clip.sampleId}-${index}`,
+          sample,
+          sequenceIndex: index
+        };
+      })
+      .filter((clip): clip is SequenceClip => clip !== null);
+    
+    setSequenceClips(clips);
+    setLoadedSequenceId(sequence.id);
+  };
+
+  const handlePlayLoadedSequence = () => {
+    // Trigger playback of already-loaded clips
+    setTimeout(() => {
+      if (sequencePlayerRef.current) {
+        sequencePlayerRef.current.play();
+      }
+    }, 50);
+  };
+
+  const handlePlaySequence = (sequence: Sequence) => {
+    handleLoadSequence(sequence);
+    handlePlayLoadedSequence();
+  };
+
+  const handleDeleteSequence = async (sequenceId: string) => {
+    if (!selectedGroupId) return;
+    if (!window.confirm('Delete this saved sequence?')) {
+      return;
+    }
+    try {
+      await api.delete(`/api/sample-groups/${selectedGroupId}/sequences/${sequenceId}`);
+      setSequences((prev) => prev.filter((s) => s.id !== sequenceId));
+    } catch (err) {
+      console.error('Failed to delete sequence:', err);
     }
   };
 
@@ -503,6 +592,17 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
               >
                 {isSmallMobile ? 'Fullscreen' : 'Full Screen Stretch'}
               </Button>
+              {playMode === 'sequence' && sequenceClips.length > 0 && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  onClick={() => setSaveSequenceDialogOpen(true)}
+                  fullWidth={isSmallMobile}
+                >
+                  Save Sequence
+                </Button>
+              )}
             </Stack>
 
             {editMode && addSoundSearchResults.length > 0 && (
@@ -537,7 +637,35 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
               </Box>
             )}
 
-            <Box sx={{ flex: 1, overflow: 'auto' }}>
+            <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+              {/* Saved Sequences Section */}
+              {sequences.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+                    Saved Sequences ({sequences.length})
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {sequences.map((sequence) => {
+                      const samplesMap = new Map(samples.map(s => [s.id, s]));
+                      return (
+                        <Grid item xs={12} sm={6} md={4} lg={3} key={sequence.id}>
+                          <SavedSequenceCard
+                            sequence={sequence}
+                            onLoad={() => handleLoadSequence(sequence)}
+                            onPlay={() => handlePlaySequence(sequence)}
+                            onDelete={() => handleDeleteSequence(sequence.id)}
+                            samples={samplesMap}
+                          />
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                </Box>
+              )}
+
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+                Sounds
+              </Typography>
               <SampleGrid
                 samples={filteredSamples}
                 currentlyPlayingId={currentlyPlayingId}
@@ -587,6 +715,18 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
           </Button>
         </DialogActions>
       </Dialog>
+
+      {selectedGroupId && (
+        <SaveSequenceDialog
+          open={saveSequenceDialogOpen}
+          onClose={() => setSaveSequenceDialogOpen(false)}
+          onSave={handleSaveSequence}
+          sequenceClips={sequenceClips}
+          soundboardId={selectedGroupId}
+          loadedSequenceId={loadedSequenceId}
+          loadedSequenceName={sequences.find(s => s.id === loadedSequenceId)?.name}
+        />
+      )}
     </>
   );
 }

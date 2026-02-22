@@ -40,6 +40,7 @@ interface SequencePlayerProps {
 
 export interface SequencePlayerHandle {
   stop: () => void;
+  play: () => void;
 }
 
 export const SequencePlayer = forwardRef<SequencePlayerHandle, SequencePlayerProps>(function SequencePlayer(
@@ -203,10 +204,11 @@ export const SequencePlayer = forwardRef<SequencePlayerHandle, SequencePlayerPro
     setCurrentTime(0);
   };
 
-  // Expose stop method to parent via ref
+  // Expose stop and play methods to parent via ref
   useImperativeHandle(ref, () => ({
-    stop: handleStop
-  }), []);
+    stop: handleStop,
+    play: handlePlaySequence
+  }), [isPlaying, isPaused, clips]);
 
   const progressPercent =
     duration > 0 ? (currentTime / duration) * 100 : 0;
