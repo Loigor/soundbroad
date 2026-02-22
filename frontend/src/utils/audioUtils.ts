@@ -5,54 +5,70 @@
 export async function getAudioDuration(audioUrl: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const audio = new Audio();
+    let resolved = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     
     // Set up event handlers
     const handleLoadedMetadata = () => {
-      cleanup();
-      if (audio.duration && Number.isFinite(audio.duration)) {
+      if (!resolved && audio.duration && Number.isFinite(audio.duration)) {
+        resolved = true;
+        cleanup();
+        console.debug(`[audioUtils] Audio duration loaded: ${audio.duration.toFixed(2)}s from ${audioUrl}`);
         resolve(audio.duration);
-      } else {
-        reject(new Error('Audio duration is invalid or not available'));
+      }
+    };
+
+    const handleCanPlay = () => {
+      // Fallback: if loadedmetadata didn't fire but we can play, try to get duration
+      if (!resolved && audio.duration && Number.isFinite(audio.duration)) {
+        resolved = true;
+        cleanup();
+        console.debug(`[audioUtils] Audio duration from canplay: ${audio.duration.toFixed(2)}s from ${audioUrl}`);
+        resolve(audio.duration);
       }
     };
     
-    const handleError = () => {
-      cleanup();
-      reject(new Error(`Failed to load audio from ${audioUrl}`));
-    };
-    
-    const handleCanPlay = () => {
-      // Fallback: if loadedmetadata didn't fire but we can play, try to get duration
-      if (audio.duration && Number.isFinite(audio.duration)) {
+    const handleError = (e: any) => {
+      if (!resolved) {
+        resolved = true;
         cleanup();
-        resolve(audio.duration);
+        const errorMsg = `Failed to load audio from ${audioUrl}: ${e?.message || 'unknown error'}`;
+        console.warn(`[audioUtils] ${errorMsg}`);
+        reject(new Error(errorMsg));
       }
     };
     
     const cleanup = () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('error', handleError);
       audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('error', handleError);
+      if (timeoutId) clearTimeout(timeoutId);
       audio.pause();
+      audio.src = '';
     };
-    
-    // Set up timeout to avoid hanging forever
-    const timeoutId = setTimeout(() => {
-      cleanup();
-      reject(new Error('Timeout loading audio duration'));
-    }, 5000);
     
     // Attach event listeners before setting src
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('error', handleError);
     audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('error', handleError);
     
     // Enable CORS
     audio.crossOrigin = 'anonymous';
     
-    // Set source and load
+    // Set source and preload
+    audio.preload = 'metadata';
     audio.src = audioUrl;
-    audio.load();
+    
+    // Set up timeout to avoid hanging forever
+    timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        const errorMsg = `Timeout loading audio duration from ${audioUrl}`;
+        console.warn(`[audioUtils] ${errorMsg}`);
+        reject(new Error(errorMsg));
+      }
+    }, 10000); // Increased timeout to 10 seconds
   });
 }
 
@@ -77,20 +93,23 @@ export async function populateMissingDurations<T extends { id: string; duration_
     return results;
   }
 
-  console.debug(`[audioUtils] Fetching duration for ${samplesNeedingDuration.length} samples`);
+  console.debug(`[audioUtils] Fetching duration for ${samplesNeedingDuration.length} samples...`);
   
   for (const sample of samplesNeedingDuration) {
     try {
-      const duration = await getAudioDuration(getAudioUrl(sample.id));
+      const audioUrl = getAudioUrl(sample.id);
+      console.debug(`[audioUtils] Fetching duration for ${sample.id} from ${audioUrl}`);
+      const duration = await getAudioDuration(audioUrl);
+      
       // Find the matching sample in results and create a NEW object with updated duration
       const idx = results.findIndex(s => s.id === sample.id);
       if (idx >= 0) {
         // Create new object to trigger React re-render (don't mutate state)
         results[idx] = { ...results[idx], duration_seconds: duration };
-        console.debug(`[audioUtils] Sample ${sample.id}: ${duration.toFixed(2)}s`);
+        console.debug(`[audioUtils] ✓ Sample ${sample.id}: ${duration.toFixed(2)}s`);
       }
     } catch (error) {
-      console.warn(`[audioUtils] Failed to get duration for sample ${sample.id}:`, error);
+      console.warn(`[audioUtils] ✗ Failed to get duration for sample ${sample.id}:`, error instanceof Error ? error.message : error);
       // Leave duration as null/0 if we can't get it, don't block the rest
     }
   }

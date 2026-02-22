@@ -26,8 +26,9 @@ import { SoundEditDialog } from '../components/SoundEditDialog';
 import { SequencePlayer, type SequenceClip, type SequencePlayerHandle } from '../components/SequencePlayer';
 import { recordPlay } from '../utils/playStats';
 import { populateMissingDurations } from '../utils/audioUtils';
+import { audioPreloader } from '../utils/audioPreloader';
 
-export function SoundboardsView({ volume = 100, audioControlRef, playMode, onProgressChange }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void }) {
+export function SoundboardsView({ volume = 100, audioControlRef, playMode, onProgressChange, enablePreload = true }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void; enablePreload?: boolean }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -72,9 +73,18 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
     api
       .get<Sample[]>('/api/samples', { params: { groupId: selectedGroupId } })
       .then((res) => populateMissingDurations(res.data, (id) => `/api/samples/${id}/audio`))
-      .then((samplesWithDuration) => setSamples(samplesWithDuration))
+      .then((samplesWithDuration) => {
+        setSamples(samplesWithDuration);
+        // Preload sounds for this soundboard if enabled
+        if (enablePreload) {
+          audioPreloader.preloadSoundboard(samplesWithDuration).catch(err => {
+            console.warn('[SoundboardsView] Preload failed:', err);
+          });
+        }
+        return samplesWithDuration;
+      })
       .finally(() => setLoadingSamples(false));
-  }, [selectedGroupId]);
+  }, [selectedGroupId, enablePreload]);
 
   useEffect(() => {
     const query = searchQuery.toLowerCase();
@@ -181,7 +191,14 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
       audio.pause();
       audio.currentTime = 0;
     }
-    const newAudio = new Audio(`/api/samples/${sample.id}/audio`);
+    
+    // Try to use preloaded audio if available
+    let newAudio = audioPreloader.getPreloaded(sample.id);
+    
+    if (!newAudio) {
+      newAudio = new Audio(`/api/samples/${sample.id}/audio`);
+    }
+    
     newAudio.volume = volume / 100;
     newAudio.onloadedmetadata = () => {
       setDurationSeconds(newAudio.duration || sample.duration_seconds || null);
@@ -393,13 +410,25 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
             sx={{
               height: '100%',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              gap: 2
             }}
           >
-            <Typography color="text.secondary">
-              Select a soundboard from the left or create a new one.
+            <Typography color="text.secondary" sx={{ textAlign: 'center' }}>
+              Select a soundboard or create a new one.
             </Typography>
+            {isMobile && groups.length > 0 && (
+              <Button
+                variant="outlined"
+                onClick={() => setSoundboardsDrawerOpen(true)}
+                fullWidth={isSmallMobile}
+                sx={{ maxWidth: 300 }}
+              >
+                Open Soundboards
+              </Button>
+            )}
           </Box>
         ) : loadingSamples ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>

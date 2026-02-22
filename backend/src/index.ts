@@ -219,11 +219,26 @@ app.get('/api/samples/:id/audio', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'File not found' });
     }
     
+    // Determine content type based on file extension
+    const ext = path.extname(filePath).toLowerCase();
+    const contentTypes: { [key: string]: string } = {
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.m4a': 'audio/mp4',
+      '.ogg': 'audio/ogg',
+      '.flac': 'audio/flac',
+      '.aac': 'audio/aac'
+    };
+    const contentType = contentTypes[ext] || 'audio/mpeg'; // Default to mp3
+    const fileSize = fs.statSync(filePath).size;
+    
     // Set proper headers for audio serving and duration detection
     res.set({
       'Accept-Ranges': 'bytes',
-      'Cache-Control': 'public, max-age=86400', // Cache for 1 day
-      'Content-Length': fs.statSync(filePath).size
+      'Cache-Control': 'public, max-age=31536000, immutable', // Cache for 1 year (immutable after upload)
+      'Content-Length': fileSize.toString(),
+      'Content-Type': contentType,
+      'ETag': `"${id}"` // Add ETag for cache validation
     });
     
     return res.sendFile(filePath);

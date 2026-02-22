@@ -49,15 +49,17 @@ export function FullscreenStretchBoard({
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
 
   // Calculate grid dimensions based on sound count and screen size
-  // Mobile: 1 column, Tablet: 2 columns, Desktop: landscape-biased
+  // Mobile: 2 columns, Tablet: 2 columns, Desktop: landscape-biased
   const { cols, rows } = useMemo(() => {
     const soundCount = samples.length;
     if (soundCount === 0) return { cols: 1, rows: 1 };
     
-    // For mobile, use 1-2 columns
+    // For mobile, use 2 columns for better space utilization
     if (isMobile) {
       if (soundCount === 1) return { cols: 1, rows: 1 };
-      return { cols: 1, rows: soundCount };
+      const cols = 2;
+      const rows = Math.ceil(soundCount / cols);
+      return { cols, rows };
     }
     
     // For tablet, use 2 columns
@@ -131,7 +133,7 @@ export function FullscreenStretchBoard({
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: { xs: 1.5, sm: 2, md: 3 },
+                padding: { xs: 1, sm: 2, md: 3 },
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 animation: isNearEnd ? `${blinkAnimation} 0.5s infinite` : 'none',
@@ -181,13 +183,13 @@ export function FullscreenStretchBoard({
                 sx={{
                   fontWeight: 700,
                   color: getContrastTextColor(sample.color),
-                  marginBottom: 1,
+                  marginBottom: 0.5,
                   wordBreak: 'break-word',
                   wordWrap: 'break-word',
                   overflowWrap: 'break-word',
-                  fontSize: { xs: '1rem', sm: '1.25rem', md: '2.125rem' },
+                  fontSize: { xs: '0.85rem', sm: '1.25rem', md: '2.125rem' },
                   lineHeight: 1.2,
-                  maxHeight: isMobile ? '2.4em' : 'auto',
+                  maxHeight: isMobile ? '2em' : 'auto',
                   overflow: isMobile ? 'hidden' : 'visible'
                 }}
               >
@@ -199,8 +201,8 @@ export function FullscreenStretchBoard({
                 sx={{
                   color: getContrastTextColor(sample.color),
                   opacity: 0.7,
-                  marginBottom: 1,
-                  fontSize: '0.9rem'
+                  marginBottom: 0.5,
+                  fontSize: { xs: '0.75rem', md: '0.9rem' }
                 }}
               >
                 {formatTime(typeof sample.duration_seconds === 'number' ? sample.duration_seconds : 0)}
@@ -252,8 +254,8 @@ export function FullscreenStretchBoard({
               <Box
                 sx={{
                   width: '90%',
-                  height: { xs: '40px', md: '60px' },
-                  marginBottom: 1.5,
+                  height: { xs: '32px', sm: '48px', md: '60px' },
+                  marginBottom: 1,
                   borderRadius: 1,
                   backgroundColor: 'rgba(0, 0, 0, 0.2)',
                   padding: '4px',
@@ -271,22 +273,22 @@ export function FullscreenStretchBoard({
               </Box>
 
               {isPlaying && (
-                <Stack spacing={1.5} sx={{ alignItems: 'center', width: '100%' }}>
+                <Stack spacing={1} sx={{ alignItems: 'center', width: '100%' }}>
                   {/* Animated playing indicator */}
                   <Box
                     sx={{
                       display: 'flex',
-                      gap: 0.5,
+                      gap: { xs: 0.3, md: 0.5 },
                       alignItems: 'flex-end',
-                      height: '24px'
+                      height: { xs: '16px', md: '24px' }
                     }}
                   >
                     {[0, 1, 2, 3, 4].map((i) => (
                       <Box
                         key={i}
                         sx={{
-                          width: '4px',
-                          height: `${20 - i * 4}px`,
+                          width: { xs: '2px', md: '4px' },
+                          height: { xs: `${13 - i * 2.6}px`, md: `${20 - i * 4}px` },
                           backgroundColor: 'rgba(144, 202, 249, 0.8)',
                           borderRadius: '2px',
                           animation: `${pulseAnimation} 0.8s ease-in-out infinite`,
@@ -301,7 +303,7 @@ export function FullscreenStretchBoard({
                     sx={{
                       color: getContrastTextColor(sample.color),
                       fontWeight: 600,
-                      fontSize: '1rem'
+                      fontSize: { xs: '0.8rem', md: '1rem' }
                     }}
                   >
                     Playing…

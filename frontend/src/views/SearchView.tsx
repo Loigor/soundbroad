@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { Box, CircularProgress, TextField } from '@mui/material';
+import { Box, CircularProgress, TextField, Stack, Pagination, Typography } from '@mui/material';
 import { api } from '../api/client';
 import type { Sample, SampleGroup } from '../api/types';
 import { SampleGrid } from '../components/SampleGrid';
@@ -7,8 +7,9 @@ import { SoundEditDialog } from '../components/SoundEditDialog';
 import { SequencePlayer, type SequenceClip, type SequencePlayerHandle } from '../components/SequencePlayer';
 import { recordPlay } from '../utils/playStats';
 import { populateMissingDurations } from '../utils/audioUtils';
+import { audioPreloader } from '../utils/audioPreloader';
 
-export function SearchView({ volume = 100, audioControlRef, playMode, onProgressChange }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void }) {
+export function SearchView({ volume = 100, audioControlRef, playMode, onProgressChange, enablePreload = true }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void; enablePreload?: boolean }) {
   const [samples, setSamples] = useState<Sample[]>([]);
   const [groups, setGroups] = useState<SampleGroup[]>([]);
   const [sequenceClips, setSequenceClips] = useState<SequenceClip[]>([]);
@@ -20,6 +21,8 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
   const [positionSeconds, setPositionSeconds] = useState<number | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [editingSoundId, setEditingSoundId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +40,12 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
         if (!cancelled && samplesWithDuration) {
           console.debug('[SearchView] After populateMissingDurations:', samplesWithDuration.map(s => ({ id: s.id, name: s.name, duration: s.duration_seconds, type: typeof s.duration_seconds })));
           setSamples(samplesWithDuration);
+          // Preload top samples if enabled
+          if (enablePreload) {
+            audioPreloader.preloadSoundboard(samplesWithDuration.slice(0, 5)).catch(err => {
+              console.warn('[SearchView] Preload failed:', err);
+            });
+          }
         }
       })
       .finally(() => {
@@ -45,7 +54,7 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enablePreload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,12 +84,35 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
     });
   }, [samples, searchTerm]);
 
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Calculate paginated results
+  const { paginatedSamples, totalPages } = useMemo(() => {
+    const total = Math.ceil(filtered.length / itemsPerPage);
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    const endIdx = startIdx + itemsPerPage;
+    return {
+      paginatedSamples: filtered.slice(startIdx, endIdx),
+      totalPages: total
+    };
+  }, [filtered, currentPage, itemsPerPage]);
+
   const handlePlay = (sample: Sample) => {
     if (audio) {
       audio.pause();
       audio.currentTime = 0;
     }
-    const newAudio = new Audio(`/api/samples/${sample.id}/audio`);
+    
+    // Try to use preloaded audio if available
+    let newAudio = audioPreloader.getPreloaded(sample.id);
+    
+    if (!newAudio) {
+      newAudio = new Audio(`/api/samples/${sample.id}/audio`);
+    }
+    
     newAudio.volume = volume / 100;
     newAudio.onloadedmetadata = () => {
       setDurationSeconds(newAudio.duration || sample.duration_seconds || null);
@@ -214,19 +246,57 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
           <CircularProgress size={32} />
         </Box>
       ) : (
-        <Box sx={{ flex: 1, overflow: 'auto' }}>
-          <SampleGrid
-            samples={filtered}
-            currentlyPlayingId={currentlyPlayingId}
-            onPlay={playMode === 'sequence' ? handleAddToSequence : handlePlay}
-            playingPositionSeconds={positionSeconds}
-            playingDurationSeconds={durationSeconds}
-            groups={groups}
-            onAddToGroup={handleAddToGroup}
-            onEditSound={(sound) => setEditingSoundId(sound.id)}
-            onDelete={handleDeleteSample}
-            sequenceMode={playMode === 'sequence'}
-          />
+        <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
+            {filtered.length === 0 ? (
+              <Typography color="text.secondary" sx={{ textAlign: 'center', mt: 4 }}>
+                No sounds found
+              </Typography>
+            ) : (
+              <SampleGrid
+                samples={paginatedSamples}
+                currentlyPlayingId={currentlyPlayingId}
+                onPlay={playMode === 'sequence' ? handleAddToSequence : handlePlay}
+                playingPositionSeconds={positionSeconds}
+                playingDurationSeconds={durationSeconds}
+                groups={groups}
+                onAddToGroup={handleAddToGroup}
+                onEditSound={(sound) => setEditingSoundId(sound.id)}
+                onDelete={handleDeleteSample}
+                sequenceMode={playMode === 'sequence'}
+              />
+            )}
+          </Box>
+
+          {/* Pagination controls */}
+          {filtered.length > 0 && (
+            <Stack
+              direction="row"
+              justifyContent="center"
+              alignItems="center"
+              spacing={2}
+              sx={{ py: 2, borderTop: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                {filtered.length === 0 ? '0' : (currentPage - 1) * itemsPerPage + 1}-
+                {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length}
+              </Typography>
+              <Pagination
+                count={totalPages}
+                page={currentPage}
+                onChange={(_e, page) => {
+                  setCurrentPage(page);
+                  // Scroll to top of SampleGrid
+                  setTimeout(() => {
+                    document.querySelector('[role="grid"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 0);
+                }}
+                size="small"
+                showFirstButton
+                showLastButton
+              />
+            </Stack>
+          )}
         </Box>
       )}
 

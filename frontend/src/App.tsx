@@ -13,7 +13,11 @@ import {
   Toolbar,
   Typography,
   Button,
-  keyframes
+  ToggleButton,
+  ToggleButtonGroup,
+  keyframes,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 // Icons are causing module resolution issues, will use text labels instead
 
@@ -30,16 +34,22 @@ import { SearchView } from './views/SearchView';
 import { SoundboardsView } from './views/SoundboardsView';
 import { AddSoundView } from './views/AddSoundView';
 import { clearAllPlayStats } from './utils/playStats';
+import { audioPreloader } from './utils/audioPreloader';
 
 type MainTab = 'search' | 'soundboards' | 'add';
 type PlayMode = 'instant' | 'sequence';
 
 function App() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [tab, setTab] = useState<MainTab>('search');
   const [playMode, setPlayMode] = useState<PlayMode>('instant');
   const [volume, setVolume] = useState(100);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
+  const [enablePreload, setEnablePreload] = useState(true);
   const audioControlRef = useRef<{ stop: () => void } | null>(null);
   const [settingsAnchor, setSettingsAnchor] = useState<null | HTMLElement>(null);
 
@@ -61,6 +71,13 @@ function App() {
     window.location.reload();
   };
 
+  const handleTogglePreload = () => {
+    const newValue = !enablePreload;
+    setEnablePreload(newValue);
+    audioPreloader.setEnabled(newValue);
+    handleSettingsClose();
+  };
+
   // Check if near the end (within 3 seconds)
   const isNearEnd = totalDuration > 0 && (totalDuration - playbackProgress) < 3;
   const progressPercent = totalDuration > 0 ? (playbackProgress / totalDuration) * 100 : 0;
@@ -73,105 +90,43 @@ function App() {
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <AppBar position="static" color="transparent" elevation={0}>
+      {/* Top AppBar with tabs only */}
+      <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
             <img 
               src="/logo-favicon.svg" 
               alt="Soundbroad logo" 
               style={{ height: 36, width: 36 }}
             />
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, display: { xs: 'none', sm: 'inline' } }}>
               Soundbroad
             </Typography>
-            <Tabs
-              value={tab}
-              onChange={(_e, value) => setTab(value)}
-              textColor="inherit"
-              indicatorColor="primary"
-            >
-              <Tab value="search" label="Search" />
-              <Tab value="soundboards" label="Soundboards" />
-              <Tab value="add" label="Add sound" />
-            </Tabs>
           </Box>
           
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 550 }}>
-            <Typography sx={{ fontSize: 14 }}>🔊</Typography>
-            <Slider
-              value={volume}
-              onChange={(_e, newValue) => setVolume(newValue as number)}
-              min={0}
-              max={100}
-              sx={{ 
-                flex: 1, 
-                minWidth: 120,
-                '& .MuiSlider-thumb': {
-                  width: 16,
-                  height: 16,
-                  backgroundColor: '#fff',
-                  '&:hover': {
-                    boxShadow: '0 0 0 8px rgba(255, 255, 255, 0.16)',
-                  }
-                },
-                '& .MuiSlider-track': {
-                  height: 4,
-                  backgroundColor: 'rgba(33, 150, 243, 0.7)',
-                }
-              }}
-            />
-            <Typography sx={{ fontSize: 14 }}>🔔</Typography>
-            <Button
-              size="small"
-              variant={playMode === 'instant' ? 'contained' : 'outlined'}
-              onClick={() => setPlayMode('instant')}
-              sx={{ width: 100 }}
-            >
-              Instant
-            </Button>
-            <Button
-              size="small"
-              variant={playMode === 'sequence' ? 'contained' : 'outlined'}
-              onClick={() => setPlayMode('sequence')}
-              sx={{ width: 100 }}
-            >
-              Sequence
-            </Button>
-            <Button
-              size="small"
-              onClick={handleStop}
-              title="Stop playback"
-            >
-              ⏹ Stop
-            </Button>
-            <Button
-              size="small"
-              onClick={handleSettingsOpen}
-              title="Settings"
-            >
-              ⚙️
-            </Button>
-          </Stack>
-          
-          <Menu
-            anchorEl={settingsAnchor}
-            open={Boolean(settingsAnchor)}
-            onClose={handleSettingsClose}
+          <Tabs
+            value={tab}
+            onChange={(_e, value) => setTab(value)}
+            textColor="inherit"
+            indicatorColor="primary"
+            sx={{ flex: 1, justifyContent: 'center' }}
           >
-            <MenuItem onClick={handleResetPlayStats}>
-              Reset play statistics
-            </MenuItem>
-          </Menu>
+            <Tab value="search" label={isMobile ? "Search" : "Search"} />
+            <Tab value="soundboards" label={isMobile ? "Boards" : "Soundboards"} />
+            <Tab value="add" label="Add" />
+          </Tabs>
+
+          <Box sx={{ width: 36 }} />
         </Toolbar>
         
-        {/* Playback progress indicator - shows for both instant and sequence modes */}
+        {/* Playback progress indicator */}
         {totalDuration > 0 && (
           <Box sx={{ px: 2, pb: 1 }}>
             <LinearProgress 
               variant="determinate" 
               value={progressPercent}
               sx={{ 
-                height: 6, 
+                height: 8, 
                 borderRadius: 1,
                 backgroundColor: isNearEnd ? 'rgba(255, 100, 100, 0.2)' : 'rgba(255, 255, 255, 0.1)',
                 '& .MuiLinearProgress-bar': {
@@ -184,19 +139,176 @@ function App() {
         )}
       </AppBar>
 
+      {/* Main content */}
       <Box
         component="main"
         sx={{
           flex: 1,
           overflow: 'hidden',
-          py: 2
+          pt: 2,
+          pb: isMobile ? 9 : 8
         }}
       >
-        <Container maxWidth="lg" sx={{ height: '100%' }}>
-          {tab === 'search' && <SearchView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} />}
-          {tab === 'soundboards' && <SoundboardsView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} />}
+        <Container maxWidth="lg" sx={{ height: '100%', px: isMobile ? 1 : undefined }}>
+          {tab === 'search' && <SearchView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} />}
+          {tab === 'soundboards' && <SoundboardsView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} />}
           {tab === 'add' && <AddSoundView />}
         </Container>
+      </Box>
+
+      {/* Bottom overlay menu */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.95)',
+          backdropFilter: 'blur(10px)',
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          zIndex: 1000,
+          p: isMobile ? 0.75 : 1,
+          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.4)',
+          display: 'flex',
+          justifyContent: 'center'
+        }}
+      >
+        <Stack
+          spacing={isMobile ? 0.75 : 1}
+          sx={{
+            flexWrap: isMobile ? 'wrap' : 'nowrap',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: 'center',
+            justifyContent: isMobile ? 'center' : 'space-between',
+            width: '100%',
+            maxWidth: isMobile ? 900 : 'none'
+          }}
+        >
+          {/* Volume control */}
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{
+              alignItems: 'center',
+              flex: isMobile ? '0 1 100%' : '0 1 auto',
+              maxWidth: 200,
+              minWidth: isMobile ? 'auto' : 160,
+              mx: isMobile ? 0 : 1,
+              order: isMobile ? 1 : 0
+            }}
+          >
+            <Button
+                size="small"
+                onClick={handleStop}
+                title="Stop playback"
+                variant="outlined"
+                sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', py: isMobile ? 0.3 : 0.4, px: isMobile ? 0.75 : 1 }}
+              >
+                ⏹ Stop
+              </Button>
+            <Typography sx={{ fontSize: { xs: 11, sm: 12 }, flexShrink: 0 }}>🔊</Typography>
+            <Slider
+              value={volume}
+              onChange={(_e, newValue) => setVolume(newValue as number)}
+              min={0}
+              max={100}
+              sx={{ 
+                flex: 1,
+                minWidth: 60,
+                '& .MuiSlider-thumb': {
+                  width: 12,
+                  height: 12,
+                  backgroundColor: '#fff',
+                  '&:hover': {
+                    boxShadow: '0 0 0 6px rgba(255, 255, 255, 0.16)',
+                  }
+                },
+                '& .MuiSlider-track': {
+                  height: 2,
+                  backgroundColor: 'rgba(33, 150, 243, 0.7)',
+                }
+              }}
+            />
+            <Typography sx={{ fontSize: { xs: 11, sm: 12 }, minWidth: 24, textAlign: 'right' }}>
+              {volume}%
+            </Typography>
+          </Stack>
+
+          {/* Control buttons */}
+          <Stack
+            direction={isMobile ? 'column' : 'row'}
+            spacing={isMobile ? 0.5 : 0.75}
+            sx={{
+              flex: isMobile ? '0 1 100%' : '0 1 auto',
+              justifyContent: 'center',
+              alignItems: 'center',
+              mx: isMobile ? 0 : 1,
+              order: isMobile ? 0 : 1
+            }}
+          >
+            <Stack direction="row" spacing={isMobile ? 0.3 : 0.5} sx={{ alignItems: 'center' }}>
+              <ToggleButtonGroup
+                value={playMode}
+                exclusive
+                onChange={(_e, newMode) => {
+                  if (newMode !== null) {
+                    setPlayMode(newMode);
+                  }
+                }}
+                size="small"
+                sx={{
+                  '& .MuiToggleButton-root': {
+                    fontSize: isMobile ? '0.65rem' : '0.75rem',
+                    py: isMobile ? 0.3 : 0.4,
+                    px: isMobile ? 0.75 : 1,
+                    textTransform: 'none',
+                    borderColor: 'rgba(255, 255, 255, 0.23)',
+                    color: 'inherit',
+                    '&.Mui-selected': {
+                      backgroundColor: 'primary.main',
+                      color: '#fff',
+                      '&:hover': {
+                        backgroundColor: 'primary.dark',
+                      }
+                    }
+                  }
+                }}
+              >
+                <ToggleButton value="instant">
+                  Instant
+                </ToggleButton>
+                <ToggleButton value="sequence">
+                  Sequence
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
+
+            <Stack direction="row" spacing={isMobile ? 0.3 : 0.5} sx={{ alignItems: 'center' }}>
+              <Button
+                size="small"
+                onClick={handleSettingsOpen}
+                title="Settings"
+                variant="outlined"
+                sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', py: isMobile ? 0.3 : 0.4, px: isMobile ? 0.75 : 1 }}
+              >
+                ⚙️ {!isMobile && 'Settings'}
+              </Button>
+            </Stack>
+          </Stack>
+        </Stack>
+
+        <Menu
+          anchorEl={settingsAnchor}
+          open={Boolean(settingsAnchor)}
+          onClose={handleSettingsClose}
+        >
+          <MenuItem onClick={handleTogglePreload}>
+            {enablePreload ? '✓ ' : '  '}Preload samples
+          </MenuItem>
+          <MenuItem onClick={handleResetPlayStats}>
+            Reset play statistics
+          </MenuItem>
+        </Menu>
       </Box>
     </Box>
   );
