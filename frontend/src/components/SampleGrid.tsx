@@ -181,7 +181,7 @@ export function SampleGrid({
                 </Tooltip>
                 {/* Duration chip - below waveform */}
                 <Chip
-                  label={`⏱ ${formatTime(sample.duration_seconds || 0)}`}
+                  label={`⏱ ${formatTime(sample.duration_seconds)}`}
                   size="small"
                   sx={{
                     backgroundColor: 'rgba(33, 150, 243, 0.4)',
@@ -366,9 +366,11 @@ export function SampleGrid({
   );
 }
 
-function formatTime(seconds: number): string {
-  if (!seconds || !Number.isFinite(seconds)) return '0:00';
-  const rounded = Math.floor(seconds);
+function formatTime(seconds: number | null | undefined): string {
+  // Handle null/undefined and ensure it's a number
+  const duration = typeof seconds === 'number' ? seconds : 0;
+  if (duration <= 0 || !Number.isFinite(duration)) return '0:00';
+  const rounded = Math.floor(duration);
   const mins = Math.floor(rounded / 60);
   const secs = rounded % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
