@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
+import { parseFile } from 'music-metadata';
 import * as db from './db';
 
 const app = express();
@@ -73,6 +74,21 @@ app.post(
         return res.status(400).json({ error: 'Name and file are required' });
       }
 
+      // Extract duration from audio file if not provided
+      let duration: number | null = durationSeconds ? Number(durationSeconds) : null;
+      if (!duration) {
+        try {
+          const filePath = path.join(FILE_STORAGE_PATH, req.file.filename);
+          const metadata = await parseFile(filePath);
+          if (metadata.format.duration) {
+            duration = metadata.format.duration;
+          }
+        } catch (err) {
+          console.error('Failed to extract duration from audio file:', err);
+          // Continue without duration
+        }
+      }
+
       const sampleId = uuidv4();
       await client.query('BEGIN');
 
@@ -83,7 +99,7 @@ app.post(
           sampleId,
           name,
           req.file.filename,
-          durationSeconds ? Number(durationSeconds) : null,
+          duration,
           color || null
         ]
       );
@@ -141,6 +157,68 @@ app.post(
     }
   }
 );
+
+// Populate missing sample durations by reading audio files
+app.post('/api/admin/populate-durations', async (req: Request, res: Response) => {
+  const client = await db.pool.connect();
+  try {
+    // Get all samples with null duration
+    const result = await client.query(
+      'SELECT id, file_path FROM samples WHERE duration_seconds IS NULL ORDER BY created_at DESC'
+    );
+    
+    const samples = result.rows as Array<{ id: string; file_path: string }>;
+    console.log(`[Admin] Found ${samples.length} samples with missing durations`);
+    
+    let updated = 0;
+    let failed = 0;
+    
+    // Extract and update duration for each sample
+    for (const sample of samples) {
+      try {
+        const filePath = path.join(FILE_STORAGE_PATH, sample.file_path);
+        
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+          console.warn(`[Admin] File not found: ${filePath}`);
+          failed++;
+          continue;
+        }
+        
+        // Extract metadata
+        const metadata = await parseFile(filePath);
+        const duration = metadata.format.duration || null;
+        
+        if (duration) {
+          await client.query(
+            'UPDATE samples SET duration_seconds = $1 WHERE id = $2',
+            [duration, sample.id]
+          );
+          console.log(`[Admin] Updated sample ${sample.id}: ${duration.toFixed(2)}s`);
+          updated++;
+        } else {
+          console.warn(`[Admin] Could not extract duration for sample ${sample.id}`);
+          failed++;
+        }
+      } catch (err) {
+        console.error(`[Admin] Error processing sample ${sample.id}:`, err);
+        failed++;
+      }
+    }
+    
+    return res.json({
+      message: 'Duration population complete',
+      updated,
+      failed,
+      total: samples.length
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to populate durations' });
+  } finally {
+    client.release();
+  }
+});
 
 // List samples with optional filters: groupId, search (name or tags)
 app.get('/api/samples', async (req: Request, res: Response) => {
