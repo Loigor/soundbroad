@@ -453,6 +453,119 @@ app.delete('/api/samples/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Get sequences for a soundboard
+app.get('/api/sample-groups/:groupId/sequences', async (req: Request, res: Response) => {
+  try {
+    const { groupId } = req.params;
+    const result = await db.query(
+      `SELECT id, group_id, name, sequence_data, created_at FROM sequences WHERE group_id = $1 ORDER BY created_at DESC`,
+      [groupId]
+    );
+    return res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to fetch sequences' });
+  }
+});
+
+// Create a sequence
+app.post('/api/sample-groups/:groupId/sequences', async (req: Request, res: Response) => {
+  try {
+    const { groupId } = req.params;
+    const { name, sequenceData } = req.body as { name?: string; sequenceData?: Array<{ sampleId: string }> };
+
+    if (!name || !sequenceData || !Array.isArray(sequenceData)) {
+      return res.status(400).json({ error: 'Name and sequenceData array are required' });
+    }
+
+    // Verify soundboard exists
+    const groupCheck = await db.query('SELECT id FROM sample_groups WHERE id = $1', [groupId]);
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Soundboard not found' });
+    }
+
+    const sequenceId = uuidv4();
+    await db.query(
+      `INSERT INTO sequences (id, group_id, name, sequence_data) VALUES ($1, $2, $3, $4)`,
+      [sequenceId, groupId, name, JSON.stringify(sequenceData)]
+    );
+
+    return res.status(201).json({ id: sequenceId });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to create sequence' });
+  }
+});
+
+// Update a sequence
+app.put('/api/sample-groups/:groupId/sequences/:sequenceId', async (req: Request, res: Response) => {
+  try {
+    const { groupId, sequenceId } = req.params;
+    const { name, sequenceData } = req.body as { name?: string; sequenceData?: Array<{ sampleId: string }> };
+
+    // Verify the sequence exists and belongs to the soundboard
+    const checkRes = await db.query(
+      `SELECT id FROM sequences WHERE id = $1 AND group_id = $2`,
+      [sequenceId, groupId]
+    );
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Sequence not found' });
+    }
+
+    // Update name and/or sequence_data
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (name !== undefined) {
+      updates.push(`name = $${paramIndex}`);
+      values.push(name);
+      paramIndex++;
+    }
+
+    if (sequenceData !== undefined) {
+      updates.push(`sequence_data = $${paramIndex}`);
+      values.push(JSON.stringify(sequenceData));
+      paramIndex++;
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    values.push(sequenceId);
+    const query = `UPDATE sequences SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
+
+    await db.query(query, values);
+    return res.status(200).json({ id: sequenceId });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to update sequence' });
+  }
+});
+
+// Delete a sequence
+app.delete('/api/sample-groups/:groupId/sequences/:sequenceId', async (req: Request, res: Response) => {
+  try {
+    const { groupId, sequenceId } = req.params;
+
+    // Verify the sequence exists and belongs to the soundboard
+    const checkRes = await db.query(
+      `SELECT id FROM sequences WHERE id = $1 AND group_id = $2`,
+      [sequenceId, groupId]
+    );
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Sequence not found' });
+    }
+
+    await db.query('DELETE FROM sequences WHERE id = $1', [sequenceId]);
+    return res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to delete sequence' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Backend listening on port ${PORT}`);
 });
