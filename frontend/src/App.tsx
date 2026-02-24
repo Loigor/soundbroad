@@ -91,7 +91,7 @@ function App() {
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Top AppBar with tabs only */}
-      <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid rgba(255,255,255,0.08)', position: 'relative', pb: 1.5 }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
             <img
@@ -119,24 +119,33 @@ function App() {
           <Box sx={{ width: 36 }} />
         </Toolbar>
 
-        {/* Playback progress indicator */}
-        {totalDuration > 0 && (
-          <Box sx={{ px: 2, pb: 1 }}>
-            <LinearProgress
-              variant="determinate"
-              value={progressPercent}
-              sx={{
-                height: 8,
-                borderRadius: 1,
-                backgroundColor: isNearEnd ? 'rgba(255, 100, 100, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                '& .MuiLinearProgress-bar': {
-                  backgroundColor: isNearEnd ? 'rgba(255, 100, 100, 0.9)' : 'rgba(33, 150, 243, 0.8)',
-                  animation: isNearEnd ? `${blinkAnimation} 0.6s infinite` : 'none'
-                }
-              }}
-            />
-          </Box>
-        )}
+        {/* Playback progress indicator - positioned absolutely to prevent layout shift */}
+        <Box 
+          sx={{ 
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            px: 2,
+            pb: 1,
+            opacity: totalDuration > 0 ? 1 : 0,
+            transition: 'opacity 0.2s ease-in-out'
+          }}
+        >
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 8,
+              borderRadius: 1,
+              backgroundColor: isNearEnd ? 'rgba(255, 100, 100, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+              '& .MuiLinearProgress-bar': {
+                backgroundColor: isNearEnd ? 'rgba(255, 100, 100, 0.9)' : 'rgba(33, 150, 243, 0.8)',
+                animation: isNearEnd ? `${blinkAnimation} 0.6s infinite` : 'none'
+              }
+            }}
+          />
+        </Box>
       </AppBar>
 
       {/* Main content */}
