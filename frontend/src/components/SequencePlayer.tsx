@@ -103,7 +103,7 @@ export const SequencePlayer = forwardRef<SequencePlayerHandle, SequencePlayerPro
 
         // Add duration of all clips before the current one
         for (let i = 0; i < currentClipIndex; i++) {
-          const clipDuration = typeof clips[i].sample.duration_seconds === 'number' ? clips[i].sample.duration_seconds : 0;
+          const clipDuration = (typeof clips[i].sample.duration_seconds === 'number' ? clips[i].sample.duration_seconds : 0) as number;
           cumulativeProgress += clipDuration;
         }
 

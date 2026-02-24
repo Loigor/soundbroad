@@ -35,6 +35,7 @@ import { SoundboardsView } from './views/SoundboardsView';
 import { AddSoundView } from './views/AddSoundView';
 import { clearAllPlayStats } from './utils/playStats';
 import { audioPreloader } from './utils/audioPreloader';
+import { useSharedAudio, type SharedAudioHandle } from './hooks/useSharedAudio';
 
 type MainTab = 'search' | 'soundboards' | 'add';
 type PlayMode = 'instant' | 'sequence';
@@ -50,11 +51,11 @@ function App() {
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
   const [enablePreload, setEnablePreload] = useState(true);
-  const audioControlRef = useRef<{ stop: () => void } | null>(null);
+  const sharedAudio = useSharedAudio();
   const [settingsAnchor, setSettingsAnchor] = useState<null | HTMLElement>(null);
 
   const handleStop = () => {
-    audioControlRef.current?.stop();
+    sharedAudio.stop();
   };
 
   const handleSettingsOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -159,8 +160,8 @@ function App() {
         }}
       >
         <Container maxWidth="lg" sx={{ height: '100%', px: isMobile ? 1 : undefined }}>
-          {tab === 'search' && <SearchView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} />}
-          {tab === 'soundboards' && <SoundboardsView volume={volume} audioControlRef={audioControlRef} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} onPlayModeChange={setPlayMode} />}
+          {tab === 'search' && <SearchView volume={volume} sharedAudio={sharedAudio} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} />}
+          {tab === 'soundboards' && <SoundboardsView volume={volume} sharedAudio={sharedAudio} playMode={playMode} onProgressChange={handleProgressChange} enablePreload={enablePreload} onPlayModeChange={setPlayMode} />}
           {tab === 'add' && <AddSoundView />}
         </Container>
       </Box>
@@ -218,7 +219,11 @@ function App() {
             <Typography sx={{ fontSize: { xs: 11, sm: 12 }, flexShrink: 0 }}>🔊</Typography>
             <Slider
               value={volume}
-              onChange={(_e, newValue) => setVolume(newValue as number)}
+              onChange={(_e, newValue) => {
+                const vol = newValue as number;
+                setVolume(vol);
+                sharedAudio.setVolume(vol / 100);
+              }}
               min={0}
               max={100}
               sx={{

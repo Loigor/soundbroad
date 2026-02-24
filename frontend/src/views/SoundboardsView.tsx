@@ -30,8 +30,9 @@ import { SavedSequenceCard } from '../components/SavedSequenceCard';
 import { recordPlay } from '../utils/playStats';
 import { populateMissingDurations } from '../utils/audioUtils';
 import { audioPreloader } from '../utils/audioPreloader';
+import type { SharedAudioHandle } from '../hooks/useSharedAudio';
 
-export function SoundboardsView({ volume = 100, audioControlRef, playMode, onProgressChange, enablePreload = true, onPlayModeChange }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void; enablePreload?: boolean; onPlayModeChange?: (mode: 'instant' | 'sequence') => void }) {
+export function SoundboardsView({ volume = 100, sharedAudio, playMode, onProgressChange, enablePreload = true, onPlayModeChange }: { volume?: number; sharedAudio: SharedAudioHandle; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void; enablePreload?: boolean; onPlayModeChange?: (mode: 'instant' | 'sequence') => void }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -47,7 +48,6 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [currentlyPlayingId, setCurrentlyPlayingId] = useState<string | null>(null);
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState<number | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [fullscreenStretchMode, setFullscreenStretchMode] = useState(false);
@@ -125,10 +125,10 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
 
   // Update volume for currently playing audio
   useEffect(() => {
-    if (audio && currentlyPlayingId) {
-      audio.volume = volume / 100;
+    if (currentlyPlayingId) {
+      sharedAudio.setVolume(volume / 100);
     }
-  }, [volume, audio, currentlyPlayingId]);
+  }, [volume, currentlyPlayingId, sharedAudio]);
 
   // Update playback progress in parent
   useEffect(() => {
@@ -141,28 +141,6 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
       }
     }
   }, [positionSeconds, durationSeconds, currentlyPlayingId, playMode, onProgressChange]);
-
-  // Set up audio control ref for parent to stop playback (both instant and sequence modes)
-  useEffect(() => {
-    if (audioControlRef) {
-      audioControlRef.current = {
-        stop: () => {
-          if (playMode === 'sequence') {
-            // Stop sequence
-            sequencePlayerRef.current?.stop();
-          } else {
-            // Stop instant playback
-            if (audio) {
-              audio.pause();
-              audio.currentTime = 0;
-              setCurrentlyPlayingId(null);
-              setPositionSeconds(0);
-            }
-          }
-        }
-      };
-    }
-  }, [audio, audioControlRef, playMode]);
 
   const handleCreateGroup = () => {
     if (!newGroupName.trim()) return;
@@ -211,33 +189,21 @@ export function SoundboardsView({ volume = 100, audioControlRef, playMode, onPro
   };
 
   const handlePlay = (sample: Sample) => {
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-    
-    // Try to use preloaded audio if available
-    let newAudio = audioPreloader.getPreloaded(sample.id);
-    
-    if (!newAudio) {
-      newAudio = new Audio(`/api/samples/${sample.id}/audio`);
-    }
-    
-    newAudio.volume = volume / 100;
-    newAudio.onloadedmetadata = () => {
-      setDurationSeconds(newAudio.duration || sample.duration_seconds || null);
-    };
-    newAudio.ontimeupdate = () => {
-      setPositionSeconds(newAudio.currentTime);
-    };
-    newAudio.onended = () => {
-      setCurrentlyPlayingId(null);
-      setPositionSeconds(0);
-    };
-    setAudio(newAudio);
-    setCurrentlyPlayingId(sample.id);
     recordPlay(sample.id);
-    void newAudio.play();
+    sharedAudio.play(
+      `/api/samples/${sample.id}/audio`,
+      (progress, duration) => {
+        setDurationSeconds(duration);
+        setPositionSeconds(progress);
+        onProgressChange?.(progress, duration);
+      },
+      () => {
+        setCurrentlyPlayingId(null);
+        setPositionSeconds(0);
+      }
+    );
+    setCurrentlyPlayingId(sample.id);
+    sharedAudio.setVolume(volume / 100);
   };
 
   const handleRemoveFromSoundboard = async (sampleId: string) => {

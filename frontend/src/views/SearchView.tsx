@@ -8,8 +8,9 @@ import { SequencePlayer, type SequenceClip, type SequencePlayerHandle } from '..
 import { recordPlay } from '../utils/playStats';
 import { populateMissingDurations } from '../utils/audioUtils';
 import { audioPreloader } from '../utils/audioPreloader';
+import type { SharedAudioHandle } from '../hooks/useSharedAudio';
 
-export function SearchView({ volume = 100, audioControlRef, playMode, onProgressChange, enablePreload = true }: { volume?: number; audioControlRef?: React.MutableRefObject<{ stop: () => void } | null>; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void; enablePreload?: boolean }) {
+export function SearchView({ volume = 100, sharedAudio, playMode, onProgressChange, enablePreload = true }: { volume?: number; sharedAudio: SharedAudioHandle; playMode: 'instant' | 'sequence'; onProgressChange?: (progress: number, duration: number) => void; enablePreload?: boolean }) {
   const [samples, setSamples] = useState<Sample[]>([]);
   const [groups, setGroups] = useState<SampleGroup[]>([]);
   const [sequenceClips, setSequenceClips] = useState<SequenceClip[]>([]);
@@ -17,7 +18,6 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentlyPlayingId, setCurrentlyPlayingId] = useState<string | null>(null);
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState<number | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [editingSoundId, setEditingSoundId] = useState<string | null>(null);
@@ -101,33 +101,21 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
   }, [filtered, currentPage, itemsPerPage]);
 
   const handlePlay = (sample: Sample) => {
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-    
-    // Try to use preloaded audio if available
-    let newAudio = audioPreloader.getPreloaded(sample.id);
-    
-    if (!newAudio) {
-      newAudio = new Audio(`/api/samples/${sample.id}/audio`);
-    }
-    
-    newAudio.volume = volume / 100;
-    newAudio.onloadedmetadata = () => {
-      setDurationSeconds(newAudio.duration || sample.duration_seconds || null);
-    };
-    newAudio.ontimeupdate = () => {
-      setPositionSeconds(newAudio.currentTime);
-    };
-    newAudio.onended = () => {
-      setCurrentlyPlayingId(null);
-      setPositionSeconds(0);
-    };
-    setAudio(newAudio);
-    setCurrentlyPlayingId(sample.id);
     recordPlay(sample.id);
-    void newAudio.play();
+    sharedAudio.play(
+      `/api/samples/${sample.id}/audio`,
+      (progress, duration) => {
+        setDurationSeconds(duration);
+        setPositionSeconds(progress);
+        onProgressChange?.(progress, duration);
+      },
+      () => {
+        setCurrentlyPlayingId(null);
+        setPositionSeconds(0);
+      }
+    );
+    setCurrentlyPlayingId(sample.id);
+    sharedAudio.setVolume(volume / 100);
   };
 
   const handleAddToGroup = async (sampleId: string, groupId: string) => {
@@ -181,10 +169,10 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
 
   // Update volume for currently playing audio
   useEffect(() => {
-    if (audio && currentlyPlayingId) {
-      audio.volume = volume / 100;
+    if (currentlyPlayingId) {
+      sharedAudio.setVolume(volume / 100);
     }
-  }, [volume, audio, currentlyPlayingId]);
+  }, [volume, currentlyPlayingId, sharedAudio]);
 
   const sequencePlayerRef = useRef<React.ComponentRef<typeof SequencePlayer>>(null);
 
@@ -199,28 +187,6 @@ export function SearchView({ volume = 100, audioControlRef, playMode, onProgress
       }
     }
   }, [positionSeconds, durationSeconds, currentlyPlayingId, playMode, onProgressChange]);
-
-  // Set up audio control ref for parent to stop playback (both instant and sequence modes)
-  useEffect(() => {
-    if (audioControlRef) {
-      audioControlRef.current = {
-        stop: () => {
-          if (playMode === 'sequence') {
-            // Stop sequence
-            sequencePlayerRef.current?.stop();
-          } else {
-            // Stop instant playback
-            if (audio) {
-              audio.pause();
-              audio.currentTime = 0;
-              setCurrentlyPlayingId(null);
-              setPositionSeconds(0);
-            }
-          }
-        }
-      };
-    }
-  }, [audio, audioControlRef, playMode]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
